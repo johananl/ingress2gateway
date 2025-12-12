@@ -15,6 +15,8 @@
 # We need all the Make variables exported as env vars.
 # Note that the ?= operator works regardless.
 
+REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+
 # Enable Go modules.
 export GO111MODULE=on
 
@@ -64,3 +66,37 @@ build: vet;$(info $(M)...Build the binary.)  @ ## Build the binary.
 .PHONY: verify
 verify:
 	hack/verify-all.sh -v
+
+.PHONY: ensure-kind
+ensure-kind:
+	echo "TODO: Ensure kind"
+
+.PHONY: kind
+kind: ensure-kind
+	@if ! kind get clusters | grep -q i2gw-e2e; then \
+		kind create cluster -n i2gw-e2e --kubeconfig $(REPO_ROOT)/kind-kubeconfig; \
+	else \
+		echo "Cluster i2gw-e2e already exists. Reusing it."; \
+		kind get kubeconfig --name i2gw-e2e > $(REPO_ROOT)/kind-kubeconfig; \
+	fi
+
+.PHONY: e2e
+e2e: ## Run end-to-end tests.
+	@if [ ! -z "$${KUBECONFIG}" ]; then \
+		echo "ERROR: KUBECONFIG is set in current shell. Refusing to run to avoid touching an"; \
+		echo "unrelated cluster."; \
+		echo "Unset KUBECONFIG and run 'I2GW_KUBECONFIG=/path/to/kubeconfig make e2e' to run"; \
+		echo "the tests against an existing cluster, or run 'make e2e' with no vars to use an"; \
+		echo "auto-created kind cluster."; \
+		exit 1; \
+	fi
+	@if [ -z "$${I2GW_KUBECONFIG}" ]; then \
+		$(MAKE) kind || exit 1; \
+		I2GW_KUBECONFIG="$(REPO_ROOT)/kind-kubeconfig"; \
+	fi; \
+	KUBECONFIG=$${I2GW_KUBECONFIG} go test -v -count=1 $(REPO_ROOT)/e2e
+
+.PHONY: clean-kind
+clean-kind:
+	kind delete cluster -n i2gw-e2e
+	rm -f $(REPO_ROOT)/kind-kubeconfig
