@@ -5,9 +5,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"helm.sh/helm/v3/pkg/action"
-	"helm.sh/helm/v3/pkg/chart/loader"
-	"helm.sh/helm/v3/pkg/cli"
+	"helm.sh/helm/v4/pkg/action"
+	"helm.sh/helm/v4/pkg/chart/loader"
+	"helm.sh/helm/v4/pkg/cli"
+	"helm.sh/helm/v4/pkg/kube"
 )
 
 func installChart(
@@ -22,9 +23,7 @@ func installChart(
 	values map[string]interface{},
 ) {
 	cfg := new(action.Configuration)
-	if err := cfg.Init(settings.RESTClientGetter(), namespace, os.Getenv("HELM_DRIVER"), func(format string, v ...interface{}) {
-		t.Logf(format, v...)
-	}); err != nil {
+	if err := cfg.Init(settings.RESTClientGetter(), namespace, os.Getenv("HELM_DRIVER")); err != nil {
 		t.Fatalf("Initializing helm config: %v", err)
 	}
 
@@ -39,7 +38,7 @@ func installChart(
 	install.ReleaseName = releaseName
 	install.Namespace = namespace
 	install.CreateNamespace = createNamespace
-	install.Wait = true
+	install.WaitStrategy = kube.StatusWatcherStrategy
 	install.Timeout = 5 * time.Minute
 	install.RepoURL = repoURL
 	install.Version = version
@@ -57,15 +56,13 @@ func installChart(
 
 func uninstallChart(t TestingT, settings *cli.EnvSettings, releaseName, namespace string) {
 	cfg := new(action.Configuration)
-	if err := cfg.Init(settings.RESTClientGetter(), namespace, os.Getenv("HELM_DRIVER"), func(format string, v ...interface{}) {
-		t.Logf(format, v...)
-	}); err != nil {
-		t.Errorf("Initializing helm config for uninstall: %v", err)
+	if err := cfg.Init(settings.RESTClientGetter(), namespace, os.Getenv("HELM_DRIVER")); err != nil {
+		t.Errorf("Initializing helm config: %v", err)
 		return
 	}
 
 	uninstall := action.NewUninstall(cfg)
-	uninstall.Wait = true
+	uninstall.WaitStrategy = kube.StatusWatcherStrategy
 	uninstall.Timeout = 5 * time.Minute
 
 	_, err := uninstall.Run(releaseName)

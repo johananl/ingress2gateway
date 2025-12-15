@@ -3,7 +3,7 @@ package e2e
 import (
 	"context"
 
-	"helm.sh/helm/v3/pkg/cli"
+	"helm.sh/helm/v4/pkg/cli"
 	"k8s.io/client-go/kubernetes"
 )
 
