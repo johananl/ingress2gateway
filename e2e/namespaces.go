@@ -54,6 +54,6 @@ func deleteNamespaceAndWait(ctx context.Context, t TestingT, client *kubernetes.
 		return false, err
 	})
 	if err != nil {
-		t.Logf("Waiting for namespace %s to delete: %v", ns, err)
+		t.Errorf("Waiting for namespace %s to delete: %v", ns, err)
 	}
 }
