@@ -63,6 +63,11 @@ func uninstallChart(t TestingT, settings *cli.EnvSettings, releaseName, namespac
 
 	uninstall := action.NewUninstall(cfg)
 	uninstall.WaitStrategy = kube.StatusWatcherStrategy
+	// The default deletion propagation mode is "background", which may cause some resources to be
+	// left behind for a while, which in turn may lead to "stuck" namespace deletions after
+	// removing a release.
+	// Relevant issue: https://github.com/helm/helm/issues/31651
+	uninstall.DeletionPropagation = "foreground"
 	uninstall.Timeout = 5 * time.Minute
 
 	_, err := uninstall.Run(releaseName)
