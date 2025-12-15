@@ -90,11 +90,18 @@ e2e: ## Run end-to-end tests.
 		echo "auto-created kind cluster."; \
 		exit 1; \
 	fi
-	@if [ -z "$${I2GW_KUBECONFIG}" ]; then \
+	@cleanup_kind=false; \
+	if [ -z "$${I2GW_KUBECONFIG}" ]; then \
 		$(MAKE) kind || exit 1; \
 		I2GW_KUBECONFIG="$(REPO_ROOT)/kind-kubeconfig"; \
+		cleanup_kind=true; \
 	fi; \
-	KUBECONFIG=$${I2GW_KUBECONFIG} go test -v -count=1 $(REPO_ROOT)/e2e
+	KUBECONFIG=$${I2GW_KUBECONFIG} go test -v -count=1 $(REPO_ROOT)/e2e; \
+	test_exit_code=$$?; \
+	if [ "$${cleanup_kind}" = "true" ] && [ "$${SKIP_CLEANUP}" != "1" ]; then \
+		$(MAKE) clean-kind; \
+	fi; \
+	exit $$test_exit_code
 
 .PHONY: clean-kind
 clean-kind:
