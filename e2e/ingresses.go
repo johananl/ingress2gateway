@@ -33,7 +33,7 @@ func createIngresses(ctx context.Context, t *testing.T, client *kubernetes.Clien
 			t.Logf("Deleting ingress %s", ingress.Name)
 			err := client.NetworkingV1().Ingresses(ns).Delete(context.Background(), ingress.Name, metav1.DeleteOptions{})
 			if err != nil {
-				t.Logf("Deleting ingress %s: %v", ingress.Name, err)
+				t.Errorf("Deleting ingress %s: %v", ingress.Name, err)
 			}
 		}
 	}

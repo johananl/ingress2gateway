@@ -28,12 +28,12 @@ func createDummyApp(ctx context.Context, t *testing.T, client *kubernetes.Client
 		t.Logf("Deleting dummy app %s", name)
 		err := client.CoreV1().Services(namespace).Delete(context.Background(), name, metav1.DeleteOptions{})
 		if err != nil {
-			t.Logf("Deleting service %s: %v", name, err)
+			t.Errorf("Deleting service %s: %v", name, err)
 		}
 
 		err = client.AppsV1().Deployments(namespace).Delete(context.Background(), name, metav1.DeleteOptions{})
 		if err != nil {
-			t.Logf("Deleting deployment %s: %v", name, err)
+			t.Errorf("Deleting deployment %s: %v", name, err)
 		}
 	}
 }

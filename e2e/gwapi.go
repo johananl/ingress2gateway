@@ -74,7 +74,7 @@ func createGateways(ctx context.Context, t *testing.T, client *gwclientset.Clien
 			t.Logf("Deleting Gateway %s/%s", namespace, gw.Name)
 			err := client.GatewayV1().Gateways(namespace).Delete(context.Background(), gw.Name, metav1.DeleteOptions{})
 			if err != nil {
-				t.Logf("Failed to delete Gateway %s: %v", gw.Name, err)
+				t.Errorf("Deleting Gateway %s: %v", gw.Name, err)
 			}
 		}
 	}
@@ -102,7 +102,7 @@ func createGatewayClasses(ctx context.Context, t *testing.T, client *gwclientset
 			t.Logf("Deleting GatewayClass %s", gc.Name)
 			err := client.GatewayV1().GatewayClasses().Delete(context.Background(), gc.Name, metav1.DeleteOptions{})
 			if err != nil {
-				t.Logf("Failed to delete GatewayClass %s: %v", gc.Name, err)
+				t.Errorf("Deleting GatewayClass %s: %v", gc.Name, err)
 			}
 		}
 	}
@@ -139,7 +139,7 @@ func createHTTPRoutes(ctx context.Context, t *testing.T, client *gwclientset.Cli
 			t.Logf("Deleting HTTPRoute %s/%s", namespace, route.Name)
 			err := client.GatewayV1().HTTPRoutes(namespace).Delete(context.Background(), route.Name, metav1.DeleteOptions{})
 			if err != nil {
-				t.Logf("Failed to delete HTTPRoute %s: %v", route.Name, err)
+				t.Errorf("Deleting HTTPRoute %s: %v", route.Name, err)
 			}
 		}
 	}
@@ -176,7 +176,7 @@ func createGRPCRoutes(ctx context.Context, t *testing.T, client *gwclientset.Cli
 			t.Logf("Deleting GRPCRoute %s/%s", namespace, route.Name)
 			err := client.GatewayV1().GRPCRoutes(namespace).Delete(context.Background(), route.Name, metav1.DeleteOptions{})
 			if err != nil {
-				t.Logf("Failed to delete GRPCRoute %s: %v", route.Name, err)
+				t.Errorf("Deleting GRPCRoute %s: %v", route.Name, err)
 			}
 		}
 	}
@@ -213,7 +213,7 @@ func createTLSRoutes(ctx context.Context, t *testing.T, client *gwclientset.Clie
 			t.Logf("Deleting TLSRoute %s/%s", namespace, route.Name)
 			err := client.GatewayV1alpha2().TLSRoutes(namespace).Delete(context.Background(), route.Name, metav1.DeleteOptions{})
 			if err != nil {
-				t.Logf("Failed to delete TLSRoute %s: %v", route.Name, err)
+				t.Errorf("Deleting TLSRoute %s: %v", route.Name, err)
 			}
 		}
 	}
@@ -250,7 +250,7 @@ func createTCPRoutes(ctx context.Context, t *testing.T, client *gwclientset.Clie
 			t.Logf("Deleting TCPRoute %s/%s", namespace, route.Name)
 			err := client.GatewayV1alpha2().TCPRoutes(namespace).Delete(context.Background(), route.Name, metav1.DeleteOptions{})
 			if err != nil {
-				t.Logf("Failed to delete TCPRoute %s: %v", route.Name, err)
+				t.Errorf("Deleting TCPRoute %s: %v", route.Name, err)
 			}
 		}
 	}
@@ -287,7 +287,7 @@ func createUDPRoutes(ctx context.Context, t *testing.T, client *gwclientset.Clie
 			t.Logf("Deleting UDPRoute %s/%s", namespace, route.Name)
 			err := client.GatewayV1alpha2().UDPRoutes(namespace).Delete(context.Background(), route.Name, metav1.DeleteOptions{})
 			if err != nil {
-				t.Logf("Failed to delete UDPRoute %s: %v", route.Name, err)
+				t.Errorf("Deleting UDPRoute %s: %v", route.Name, err)
 			}
 		}
 	}
@@ -324,7 +324,7 @@ func createBackendTLSPolicies(ctx context.Context, t *testing.T, client *gwclien
 			t.Logf("Deleting BackendTLSPolicy %s/%s", namespace, policy.Name)
 			err := client.GatewayV1().BackendTLSPolicies(namespace).Delete(context.Background(), policy.Name, metav1.DeleteOptions{})
 			if err != nil {
-				t.Logf("Failed to delete BackendTLSPolicy %s: %v", policy.Name, err)
+				t.Errorf("Deleting BackendTLSPolicy %s: %v", policy.Name, err)
 			}
 		}
 	}
@@ -361,7 +361,7 @@ func createReferenceGrants(ctx context.Context, t *testing.T, client *gwclientse
 			t.Logf("Deleting ReferenceGrant %s/%s", namespace, grant.Name)
 			err := client.GatewayV1beta1().ReferenceGrants(namespace).Delete(context.Background(), grant.Name, metav1.DeleteOptions{})
 			if err != nil {
-				t.Logf("Failed to delete ReferenceGrant %s: %v", grant.Name, err)
+				t.Errorf("Deleting ReferenceGrant %s: %v", grant.Name, err)
 			}
 		}
 	}

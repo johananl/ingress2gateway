@@ -60,7 +60,7 @@ func uninstallChart(t TestingT, settings *cli.EnvSettings, releaseName, namespac
 	if err := cfg.Init(settings.RESTClientGetter(), namespace, os.Getenv("HELM_DRIVER"), func(format string, v ...interface{}) {
 		t.Logf(format, v...)
 	}); err != nil {
-		t.Logf("Initializing helm config for uninstall: %v", err)
+		t.Errorf("Initializing helm config for uninstall: %v", err)
 		return
 	}
 
@@ -70,6 +70,6 @@ func uninstallChart(t TestingT, settings *cli.EnvSettings, releaseName, namespac
 
 	_, err := uninstall.Run(releaseName)
 	if err != nil {
-		t.Logf("Uninstalling %s: %v", releaseName, err)
+		t.Errorf("Uninstalling %s: %v", releaseName, err)
 	}
 }
