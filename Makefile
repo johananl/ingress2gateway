@@ -96,7 +96,7 @@ e2e: ## Run end-to-end tests.
 		I2GW_KUBECONFIG="$(REPO_ROOT)/kind-kubeconfig"; \
 		cleanup_kind=true; \
 	fi; \
-	KUBECONFIG=$${I2GW_KUBECONFIG} go test -v -count=1 $(REPO_ROOT)/e2e; \
+	KUBECONFIG=$${I2GW_KUBECONFIG} go test -v -count=1 -timeout=30m $(REPO_ROOT)/e2e; \
 	test_exit_code=$$?; \
 	if [ "$${cleanup_kind}" = "true" ] && [ "$${SKIP_CLEANUP}" != "1" ]; then \
 		$(MAKE) clean-kind; \
