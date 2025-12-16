@@ -73,28 +73,44 @@ func runTestCase(t *testing.T, tc *TestCase) {
 		t.Logf("Running test case: %s", tc.Description)
 
 		// Deploy ingress providers.
-		var cleanupIngressProvider func()
 		for _, p := range tc.Providers {
+			var key string
+			var installFunc func() func()
+
 			switch p {
 			case "ingress-nginx":
+				key = "ingress-nginx"
 				ns := fmt.Sprintf("%s-ingress-nginx", e2ePrefix)
-				cleanupIngressProvider = deployIngressNginx(ctx, t, k8sClient, kubeconfig, ns, skipCleanup)
+				installFunc = func() func() {
+					logger := &StdLogger{}
+					return deployIngressNginx(ctx, logger, k8sClient, kubeconfig, ns, skipCleanup)
+				}
 			default:
 				t.Fatalf("Unknown ingress provider: %s", p)
 			}
-			t.Cleanup(cleanupIngressProvider)
+			release := globalResourceManager.Acquire(key, installFunc)
+			t.Cleanup(release)
 		}
 
 		// Deploy a GWAPI implementation.
-		var cleanupGWAPI func()
-		switch tc.GatewayImplementation {
-		case "istio":
-			ns := fmt.Sprintf("%s-istio-system", e2ePrefix)
-			cleanupGWAPI = deployGatewayAPIIstio(ctx, t, k8sClient, kubeconfig, ns, skipCleanup)
-		default:
-			t.Fatalf("Unknown Gateway Implementation: %s", tc.GatewayImplementation)
+		if tc.GatewayImplementation != "" {
+			var key string
+			var installFunc func() func()
+
+			switch tc.GatewayImplementation {
+			case "istio":
+				key = "istio"
+				ns := fmt.Sprintf("%s-istio-system", e2ePrefix)
+				installFunc = func() func() {
+					logger := &StdLogger{}
+					return deployGatewayAPIIstio(ctx, logger, k8sClient, kubeconfig, ns, skipCleanup)
+				}
+			default:
+				t.Fatalf("Unknown Gateway Implementation: %s", tc.GatewayImplementation)
+			}
+			release := globalResourceManager.Acquire(key, installFunc)
+			t.Cleanup(release)
 		}
-		t.Cleanup(cleanupGWAPI)
 
 		// Deploy a dummy app.
 		cleanupDummyApp := createDummyApp(ctx, t, k8sClient, appNS, skipCleanup)
