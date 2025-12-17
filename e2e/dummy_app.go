@@ -3,21 +3,24 @@ package e2e
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 )
 
 const name = "dummy-app"
 
-// TODO: Wait for app to converge.
 func createDummyApp(ctx context.Context, t *testing.T, client *kubernetes.Clientset, namespace string, skipCleanup bool) func() {
 	createDummyAppDeployment(ctx, t, client, namespace)
 	createDummyAppService(ctx, t, client, namespace)
+
+	waitForDummyApp(ctx, t, client, namespace)
 
 	return func() {
 		if skipCleanup {
@@ -98,5 +101,22 @@ func createDummyAppService(ctx context.Context, t *testing.T, client *kubernetes
 	}
 
 	_, err := client.CoreV1().Services(namespace).Create(ctx, service, metav1.CreateOptions{})
+	require.NoError(t, err)
+}
+
+func waitForDummyApp(ctx context.Context, t *testing.T, client *kubernetes.Clientset, namespace string) {
+	t.Log("Waiting for dummy app to be ready")
+	err := wait.PollUntilContextTimeout(ctx, 1*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		dep, err := client.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		for _, cond := range dep.Status.Conditions {
+			if cond.Type == appsv1.DeploymentAvailable && cond.Status == corev1.ConditionTrue {
+				return true, nil
+			}
+		}
+		return false, nil
+	})
 	require.NoError(t, err)
 }
