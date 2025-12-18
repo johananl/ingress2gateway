@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math/rand"
@@ -125,7 +126,7 @@ func runTestCase(t *testing.T, tc *TestCase) {
 		t.Logf("Got ingress addresses: %v", addresses)
 
 		// Run verifiers against ingresses.
-		verifyIngresses(t, tc, appNS, addresses)
+		verifyIngresses(ctx, t, tc, appNS, addresses)
 
 		// Call ingress2gateway.
 		// Pass an empty input file to make i2gw read ingresses from the cluster.
@@ -160,11 +161,11 @@ func runTestCase(t *testing.T, tc *TestCase) {
 		// try to verify before the GWAPI proxy is provisioned.
 
 		// Run verifier against GWAPI implementation.
-		verifyGatewayResources(t, tc, appNS, gwAddresses)
+		verifyGatewayResources(ctx, t, tc, appNS, gwAddresses)
 	})
 }
 
-func verifyIngresses(t *testing.T, tc *TestCase, namespace string, addresses map[types.NamespacedName]net.IP) {
+func verifyIngresses(ctx context.Context, t *testing.T, tc *TestCase, namespace string, addresses map[types.NamespacedName]net.IP) {
 	for ingressName, verifiers := range tc.Verifiers {
 		nn := types.NamespacedName{Namespace: namespace, Name: ingressName}
 		ip, ok := addresses[nn]
@@ -173,7 +174,7 @@ func verifyIngresses(t *testing.T, tc *TestCase, namespace string, addresses map
 		}
 
 		for _, v := range verifiers {
-			err := v.Verify(t, ip)
+			err := v.Verify(ctx, t, ip)
 			if err != nil {
 				t.Fatalf("Ingress verification failed: %v", err)
 			}
@@ -181,7 +182,7 @@ func verifyIngresses(t *testing.T, tc *TestCase, namespace string, addresses map
 	}
 }
 
-func verifyGatewayResources(t *testing.T, tc *TestCase, namespace string, gwAddresses map[types.NamespacedName]net.IP) {
+func verifyGatewayResources(ctx context.Context, t *testing.T, tc *TestCase, namespace string, gwAddresses map[types.NamespacedName]net.IP) {
 	for ingressName, verifiers := range tc.Verifiers {
 		// Find the ingress to determine the expected Gateway name.
 		var ingress *networkingv1.Ingress
@@ -207,7 +208,7 @@ func verifyGatewayResources(t *testing.T, tc *TestCase, namespace string, gwAddr
 		}
 
 		for _, v := range verifiers {
-			err := v.Verify(t, ip)
+			err := v.Verify(ctx, t, ip)
 			if err != nil {
 				t.Fatalf("Gateway API verification failed: %v", err)
 			}
