@@ -7,6 +7,9 @@ import (
 	"net"
 	"net/http"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 type Verifier interface {
@@ -28,24 +31,29 @@ func (v *HTTPGetVerifier) Verify(ctx context.Context, t *testing.T, ip net.IP) e
 		req.Host = v.Host
 	}
 
-	t.Logf("Sending HTTP GET request to %s", req.URL.String())
+	t.Logf("Sending HTTP GET requests to %s", req.URL.String())
 
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("Sending HTTP GET: %w", err)
-	}
+	var res *http.Response
+	require.Eventually(t, func() bool {
+		res, err = http.DefaultClient.Do(req)
+		if err != nil {
+			t.Logf("Sending HTTP GET: %v", err)
+			return false
+		}
+		if res.StatusCode != 200 {
+			t.Logf("Unexpected HTTP status code: got %d, want %d", res.StatusCode, 200)
+			return false
+		}
+		return true
+	}, 5*time.Minute, 1*time.Second, "Couldn't get a healthy HTTP response in time")
 	defer res.Body.Close()
-
-	if res.StatusCode != 200 {
-		return fmt.Errorf("Unexpected HTTP status code: got %d, want %d", res.StatusCode, 200)
-	}
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("reading HTTP body: %w", err)
 	}
 
-	t.Logf("Got a response: %s", body)
+	t.Logf("Got a healthy response: %s", body)
 
 	return nil
 }

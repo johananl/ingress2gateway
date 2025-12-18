@@ -157,9 +157,6 @@ func runTestCase(t *testing.T, tc *TestCase) {
 		gwAddresses := waitForGatewayAddresses(ctx, t, gwClient, appNS, getGateways(res))
 		t.Logf("Got gateway addresses: %v", gwAddresses)
 
-		// TODO: We might need to wait for additional resources, e.g. HTTPRoute, otherwise we might
-		// try to verify before the GWAPI proxy is provisioned.
-
 		// Run verifier against GWAPI implementation.
 		verifyGatewayResources(ctx, t, tc, appNS, gwAddresses)
 	})
