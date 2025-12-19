@@ -11,7 +11,9 @@ import (
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 	logger := &StdLogger{}
+
 	skipCleanup := os.Getenv("SKIP_CLEANUP") == "1"
+	shouldDeployMetalLB := os.Getenv("DEPLOY_METALLB") == "1"
 
 	// We deliberately avoid setting a default kubeconfig so that we don't accidentally create e2e
 	// resources on a production cluster.
@@ -35,7 +37,11 @@ func TestMain(m *testing.M) {
 		logger.Fatalf("Creating dynamic client: %v", err)
 	}
 
-	cleanupMetalLB := deployMetalLB(ctx, logger, k8sClient, dynamicClient, kubeconfig, skipCleanup)
+	cleanupMetalLB := func() {} // Default to a no-op function
+	if shouldDeployMetalLB {
+		cleanupMetalLB = deployMetalLB(ctx, logger, k8sClient, dynamicClient, kubeconfig, skipCleanup)
+	}
+
 	logger.Logf("Deploying Gateway API CRDs")
 	cleanupCRDs := deployCRDs(ctx, logger, apiextensionsClient, skipCleanup)
 

@@ -80,6 +80,9 @@ kind: ensure-kind
 		kind get kubeconfig --name i2gw-e2e > $(REPO_ROOT)/kind-kubeconfig; \
 	fi
 
+# Set I2GW_KUBECONFIG to a path to a kubeconfig file to run the tests against an existing cluster.
+# Running without setting this variable will create a local kind cluster and use it for running the
+# tests.
 .PHONY: e2e
 e2e: ## Run end-to-end tests.
 	@if [ ! -z "$${KUBECONFIG}" ]; then \
@@ -91,12 +94,15 @@ e2e: ## Run end-to-end tests.
 		exit 1; \
 	fi
 	@cleanup_kind=false; \
+	deploy_metallb="$${I2GW_DEPLOY_METALLB}"; \
+	kubeconfig="$${I2GW_KUBECONFIG}"; \
 	if [ -z "$${I2GW_KUBECONFIG}" ]; then \
 		$(MAKE) kind || exit 1; \
-		I2GW_KUBECONFIG="$(REPO_ROOT)/kind-kubeconfig"; \
+		kubeconfig="$(REPO_ROOT)/kind-kubeconfig"; \
 		cleanup_kind=true; \
+		deploy_metallb=1; \
 	fi; \
-	KUBECONFIG=$${I2GW_KUBECONFIG} go test -race -v -count=1 -timeout=30m $(REPO_ROOT)/e2e; \
+	DEPLOY_METALLB=$${deploy_metallb} KUBECONFIG=$${kubeconfig} go test -race -v -count=1 -timeout=30m $(REPO_ROOT)/e2e; \
 	test_exit_code=$$?; \
 	if [ "$${cleanup_kind}" = "true" ] && [ "$${SKIP_CLEANUP}" != "1" ]; then \
 		$(MAKE) clean-kind; \
