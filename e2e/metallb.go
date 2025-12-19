@@ -78,8 +78,6 @@ func getIPRange(t TestingT, ipStr string) (string, string) {
 		t.Fatalf("IPv6 not supported in this helper yet")
 	}
 
-	// TODO: Ensure this works with generic k8s clusters.
-
 	// We assume a /16 network for Kind/Docker.
 	// We use the last octet 200-250 of the last subnet in the /16.
 	// e.g. 172.18.0.2 -> 172.18.255.200 - 172.18.255.250
