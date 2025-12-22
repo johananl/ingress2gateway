@@ -31,11 +31,13 @@ func (v *HTTPGetVerifier) Verify(ctx context.Context, t *testing.T, ip net.IP) e
 		req.Host = v.Host
 	}
 
+	client := http.Client{Timeout: 5 * time.Second}
+
 	t.Logf("Sending HTTP GET requests to %s", req.URL.String())
 
 	var res *http.Response
 	require.Eventually(t, func() bool {
-		res, err = http.DefaultClient.Do(req)
+		res, err = client.Do(req)
 		if err != nil {
 			t.Logf("Sending HTTP GET: %v", err)
 			return false
