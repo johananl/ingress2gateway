@@ -43,8 +43,7 @@ func installChart(
 	install.RepoURL = repoURL
 	install.Version = version
 
-	// TODO: Retry on failure? Random GitHub errors can make the tests fail.
-	cp, err := install.ChartPathOptions.LocateChart(chartName, settings)
+	cp, err := locateChartWithRetry(t, install, chartName, settings)
 	require.NoError(t, err)
 
 	chartRequested, err := loader.Load(cp)
@@ -74,4 +73,27 @@ func uninstallChart(t TestingT, settings *cli.EnvSettings, releaseName, namespac
 	if err != nil {
 		t.Errorf("Uninstalling %s: %v", releaseName, err)
 	}
+}
+
+func locateChartWithRetry(t TestingT, install *action.Install, chartName string, settings *cli.EnvSettings) (string, error) {
+	var cp string
+	var err error
+	const maxRetries = 5
+
+	for i := range maxRetries {
+		cp, err = install.ChartPathOptions.LocateChart(chartName, settings)
+		if err == nil {
+			return cp, nil
+		}
+
+		// Helm masks the underlying HTTP errors and status codes so we can't easily distinguish
+		// transient errors (e.g. 503) from permanent errors (e.g. 404). Rather than relying on
+		// fragile string parsing, we treat all errors as transient failures. This isn't a big
+		// problem since the whole retry process is fairly short.
+
+		t.Logf("Locating chart (attempt %d/%d): %v", i+1, maxRetries, err)
+		time.Sleep(2 * time.Second)
+	}
+
+	return "", err
 }
