@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"strings"
@@ -34,8 +35,7 @@ func deployMetalLB(ctx context.Context, t TestingT, client *kubernetes.Clientset
 
 	installChart(t, settings, metalLBChartRepo, "metallb", "metallb", metalLBChartVersion, metalLBNamespace, true, nil)
 
-	// Determine IP range.
-	cidr := getClusterCIDR(ctx, t, client)
+	cidr := detectNodeCIDR(ctx, t, client)
 	start, end := getIPRange(t, cidr)
 	t.Logf("Configuring MetalLB with IP range: %s-%s", start, end)
 
@@ -53,35 +53,127 @@ func deployMetalLB(ctx context.Context, t TestingT, client *kubernetes.Clientset
 	}
 }
 
-func getClusterCIDR(ctx context.Context, t TestingT, client *kubernetes.Clientset) string {
+func detectNodeCIDR(ctx context.Context, t TestingT, client *kubernetes.Clientset) string {
 	nodes, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	require.NoError(t, err)
 	require.NotEmpty(t, nodes.Items)
 
-	for _, addr := range nodes.Items[0].Status.Addresses {
-		if addr.Type == corev1.NodeInternalIP {
-			return addr.Address
+	var internalIP string
+	for _, node := range nodes.Items {
+		for _, addr := range node.Status.Addresses {
+			if addr.Type == corev1.NodeInternalIP {
+				if net.ParseIP(addr.Address).To4() != nil {
+					internalIP = addr.Address
+					break
+				}
+			}
+		}
+		if internalIP != "" {
+			break
 		}
 	}
-	t.Fatalf("Could not find node InternalIP")
-	return ""
+
+	if internalIP == "" {
+		t.Fatalf("Could not find node with IPv4 InternalIP")
+	}
+
+	localAddr, err := findEgressNIC(internalIP)
+	require.NoError(t, err)
+	require.NotNil(t, localAddr)
+
+	ipNet, err := ipNetworkForIP(localAddr.IP)
+	require.NoError(t, err)
+	require.NotNil(t, ipNet)
+
+	ones, _ := ipNet.Mask.Size()
+	return fmt.Sprintf("%s/%d", internalIP, ones)
 }
 
-func getIPRange(t TestingT, ipStr string) (string, string) {
-	ip := net.ParseIP(ipStr)
-	if ip == nil {
-		t.Fatalf("Invalid IP: %s", ipStr)
+// Searches the local network interfaces for an interface with the specified IP and returns the
+// matching address as a pointer to net.IPNet.
+func ipNetworkForIP(ip net.IP) (*net.IPNet, error) {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, fmt.Errorf("listing interfaces: %w", err)
 	}
 
-	ip4 := ip.To4()
+	for _, iface := range interfaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			if ipNet, ok := addr.(*net.IPNet); ok {
+				if ipNet.IP.Equal(ip) {
+					return ipNet, nil
+				}
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("could not find local interface for IP %s", ip.String())
+}
+
+// Figures out which local NIC is used to get to the specified IP.
+func findEgressNIC(ip string) (*net.UDPAddr, error) {
+	// We're using a UDP socket without writing so we aren't sending any packets.
+	conn, err := net.Dial("udp", fmt.Sprintf("%s:80", ip))
+	if err != nil {
+		return nil, fmt.Errorf("dialing node IP %s: %w", ip, err)
+	}
+	defer conn.Close()
+
+	return conn.LocalAddr().(*net.UDPAddr), nil
+}
+
+// Accepts a CIDR, carves out a range to be used by MetalLB and returns that range as a start IP
+// and end IP.
+func getIPRange(t TestingT, cidr string) (string, string) {
+	// Compute the network address (first address in CIDR).
+	_, ipnet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		t.Fatalf("Invalid CIDR: %s", cidr)
+	}
+
+	// Convert network address to an IP we can do bitwise operations on.
+	ip4 := ipnet.IP.To4()
 	if ip4 == nil {
-		t.Fatalf("IPv6 not supported in this helper yet")
+		t.Fatalf("IPv6 support not implemented")
 	}
 
-	// We assume a /16 network for Kind/Docker.
-	// We use the last octet 200-250 of the last subnet in the /16.
-	// e.g. 172.18.0.2 -> 172.18.255.200 - 172.18.255.250
-	return fmt.Sprintf("%d.%d.255.200", ip4[0], ip4[1]), fmt.Sprintf("%d.%d.255.250", ip4[0], ip4[1])
+	// Compute the subnet mask.
+	ones, bits := ipnet.Mask.Size()
+	if bits != 32 {
+		t.Fatalf("IPv6 support not implemented")
+	}
+
+	// Ensure the CIDR is big enough.
+	if ones > 26 {
+		t.Fatalf("Subnet too small for MetalLB range")
+	}
+
+	// Compute the broadcast address (last address in CIDR).
+	broadcast := net.IP(make([]byte, 4))
+	for i := range ip4 {
+		broadcast[i] = ip4[i] | ^ipnet.Mask[i]
+	}
+
+	// Convert broadcast address to an integer.
+	broadcastVal := binary.BigEndian.Uint32(broadcast)
+
+	// Define range.
+	endVal := broadcastVal - 5
+	startVal := endVal - 50
+
+	// Construct start IP.
+	startIP := make(net.IP, 4)
+	binary.BigEndian.PutUint32(startIP, startVal)
+
+	// Construct end IP.
+	endIP := make(net.IP, 4)
+	binary.BigEndian.PutUint32(endIP, endVal)
+
+	return startIP.String(), endIP.String()
 }
 
 func applyMetalLBConfig(ctx context.Context, t TestingT, client dynamic.Interface, start, end string) {
