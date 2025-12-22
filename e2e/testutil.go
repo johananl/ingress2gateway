@@ -32,8 +32,6 @@ import (
 const e2ePrefix = "i2gwe2e"
 
 type TestCase struct {
-	Name                  string
-	Description           string
 	Ingresses             []*networkingv1.Ingress
 	Providers             []string
 	ProviderFlags         map[string]map[string]string
@@ -70,96 +68,92 @@ func runTestCase(t *testing.T, tc *TestCase) {
 	cleanupNS := createNamespace(ctx, t, k8sClient, appNS, skipCleanup)
 	t.Cleanup(cleanupNS)
 
-	t.Run(tc.Name, func(t *testing.T) {
-		t.Logf("Running test case: %s", tc.Description)
+	// Deploy ingress providers.
+	for _, p := range tc.Providers {
+		var key string
+		var installFunc func() func()
 
-		// Deploy ingress providers.
-		for _, p := range tc.Providers {
-			var key string
-			var installFunc func() func()
-
-			switch p {
-			case "ingress-nginx":
-				key = "ingress-nginx"
-				ns := fmt.Sprintf("%s-ingress-nginx", e2ePrefix)
-				installFunc = func() func() {
-					logger := &StdLogger{}
-					return deployIngressNginx(ctx, logger, k8sClient, kubeconfig, ns, skipCleanup)
-				}
-			default:
-				t.Fatalf("Unknown ingress provider: %s", p)
+		switch p {
+		case "ingress-nginx":
+			key = "ingress-nginx"
+			ns := fmt.Sprintf("%s-ingress-nginx", e2ePrefix)
+			installFunc = func() func() {
+				logger := &StdLogger{}
+				return deployIngressNginx(ctx, logger, k8sClient, kubeconfig, ns, skipCleanup)
 			}
-			release := globalResourceManager.Acquire(key, installFunc)
-			t.Cleanup(release)
+		default:
+			t.Fatalf("Unknown ingress provider: %s", p)
 		}
+		release := globalResourceManager.Acquire(key, installFunc)
+		t.Cleanup(release)
+	}
 
-		// Deploy a GWAPI implementation.
-		if tc.GatewayImplementation != "" {
-			var key string
-			var installFunc func() func()
+	// Deploy a GWAPI implementation.
+	if tc.GatewayImplementation != "" {
+		var key string
+		var installFunc func() func()
 
-			switch tc.GatewayImplementation {
-			case "istio":
-				key = "istio"
-				ns := fmt.Sprintf("%s-istio-system", e2ePrefix)
-				installFunc = func() func() {
-					logger := &StdLogger{}
-					return deployGatewayAPIIstio(ctx, logger, k8sClient, kubeconfig, ns, skipCleanup)
-				}
-			default:
-				t.Fatalf("Unknown Gateway Implementation: %s", tc.GatewayImplementation)
+		switch tc.GatewayImplementation {
+		case "istio":
+			key = "istio"
+			ns := fmt.Sprintf("%s-istio-system", e2ePrefix)
+			installFunc = func() func() {
+				logger := &StdLogger{}
+				return deployGatewayAPIIstio(ctx, logger, k8sClient, kubeconfig, ns, skipCleanup)
 			}
-			release := globalResourceManager.Acquire(key, installFunc)
-			t.Cleanup(release)
+		default:
+			t.Fatalf("Unknown Gateway Implementation: %s", tc.GatewayImplementation)
 		}
+		release := globalResourceManager.Acquire(key, installFunc)
+		t.Cleanup(release)
+	}
 
-		// Deploy a dummy app.
-		cleanupDummyApp := createDummyApp(ctx, t, k8sClient, appNS, skipCleanup)
-		t.Cleanup(cleanupDummyApp)
+	// Deploy a dummy app.
+	cleanupDummyApp := createDummyApp(ctx, t, k8sClient, appNS, skipCleanup)
+	t.Cleanup(cleanupDummyApp)
 
-		// Create ingress resources.
-		cleanupIngresses := createIngresses(ctx, t, k8sClient, appNS, tc.Ingresses, skipCleanup)
-		t.Cleanup(cleanupIngresses)
+	// Create ingress resources.
+	cleanupIngresses := createIngresses(ctx, t, k8sClient, appNS, tc.Ingresses, skipCleanup)
+	t.Cleanup(cleanupIngresses)
 
-		// Wait for ingresses to get IP addresses.
-		addresses := waitForIngressAddresses(ctx, t, k8sClient, appNS, tc.Ingresses)
-		t.Logf("Got ingress addresses: %v", addresses)
+	// Wait for ingresses to get IP addresses.
+	addresses := waitForIngressAddresses(ctx, t, k8sClient, appNS, tc.Ingresses)
+	t.Logf("Got ingress addresses: %v", addresses)
 
-		// Run verifiers against ingresses.
-		verifyIngresses(ctx, t, tc, appNS, addresses)
+	// Run verifiers against ingresses.
+	verifyIngresses(ctx, t, tc, appNS, addresses)
 
-		// Call ingress2gateway.
-		// Pass an empty input file to make i2gw read ingresses from the cluster.
-		res, notif, err := i2gw.ToGatewayAPIResources(ctx, appNS, "", tc.Providers, tc.ProviderFlags)
-		require.NoError(t, err)
+	// Call ingress2gateway.
+	// Pass an empty input file to make i2gw read ingresses from the cluster.
+	res, notif, err := i2gw.ToGatewayAPIResources(ctx, appNS, "", tc.Providers, tc.ProviderFlags)
+	require.NoError(t, err)
 
-		if len(notif) > 0 {
-			t.Log("Received notifications during conversion:")
-			for _, table := range notif {
-				t.Log(table)
-			}
+	if len(notif) > 0 {
+		t.Log("Received notifications during conversion:")
+		for _, table := range notif {
+			t.Log(table)
 		}
+	}
 
-		// TODO: Hack! Force correct gateway class since i2gw doesn't seem to infer that from the
-		// ingress at the moment.
-		for _, r := range res {
-			for k, v := range r.Gateways {
-				v.Spec.GatewayClassName = gwapiv1.ObjectName(tc.GatewayImplementation)
-				r.Gateways[k] = v
-			}
+	// TODO: Hack! Force correct gateway class since i2gw doesn't seem to infer that from the
+	// ingress at the moment.
+	for _, r := range res {
+		for k, v := range r.Gateways {
+			v.Spec.GatewayClassName = gwapiv1.ObjectName(tc.GatewayImplementation)
+			r.Gateways[k] = v
 		}
+	}
 
-		// Create Gateway API resources.
-		cleanupGatewayResources := createGatewayResources(ctx, t, gwClient, appNS, res, skipCleanup)
-		t.Cleanup(cleanupGatewayResources)
+	// Create Gateway API resources.
+	cleanupGatewayResources := createGatewayResources(ctx, t, gwClient, appNS, res, skipCleanup)
+	t.Cleanup(cleanupGatewayResources)
 
-		// Wait for gateways to get IP addresses.
-		gwAddresses := waitForGatewayAddresses(ctx, t, gwClient, appNS, getGateways(res))
-		t.Logf("Got gateway addresses: %v", gwAddresses)
+	// Wait for gateways to get IP addresses.
+	gwAddresses := waitForGatewayAddresses(ctx, t, gwClient, appNS, getGateways(res))
+	t.Logf("Got gateway addresses: %v", gwAddresses)
 
-		// Run verifier against GWAPI implementation.
-		verifyGatewayResources(ctx, t, tc, appNS, gwAddresses)
-	})
+	// Run verifier against GWAPI implementation.
+	verifyGatewayResources(ctx, t, tc, appNS, gwAddresses)
 }
 
 func verifyIngresses(ctx context.Context, t *testing.T, tc *TestCase, namespace string, addresses map[types.NamespacedName]net.IP) {
