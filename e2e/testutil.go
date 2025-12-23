@@ -69,6 +69,7 @@ func runTestCase(t *testing.T, tc *TestCase) {
 	t.Cleanup(cleanupNS)
 
 	// Deploy ingress providers.
+	// TODO: Parallelize to save time.
 	for _, p := range tc.Providers {
 		var key string
 		var installFunc func() func()
@@ -89,6 +90,7 @@ func runTestCase(t *testing.T, tc *TestCase) {
 	}
 
 	// Deploy a GWAPI implementation.
+	// TODO: Parallelize to save time.
 	if tc.GatewayImplementation != "" {
 		var key string
 		var installFunc func() func()
@@ -113,6 +115,7 @@ func runTestCase(t *testing.T, tc *TestCase) {
 	t.Cleanup(cleanupDummyApp)
 
 	// Create ingress resources.
+	// TODO: Prefix ingresses to improve isolation?
 	cleanupIngresses := createIngresses(ctx, t, k8sClient, appNS, tc.Ingresses, skipCleanup)
 	t.Cleanup(cleanupIngresses)
 
