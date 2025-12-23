@@ -43,6 +43,7 @@ func runTestCase(t *testing.T, tc *TestCase) {
 	t.Parallel()
 
 	ctx := t.Context()
+	logger := &StdLogger{}
 
 	// We deliberately avoid setting a default kubeconfig so that we don't accidentally create e2e
 	// resources on a production cluster.
@@ -68,46 +69,50 @@ func runTestCase(t *testing.T, tc *TestCase) {
 	cleanupNS := createNamespace(ctx, t, k8sClient, appNS, skipCleanup)
 	t.Cleanup(cleanupNS)
 
-	// Deploy ingress providers.
-	// TODO: Parallelize to save time.
-	for _, p := range tc.Providers {
-		var key string
-		var installFunc func() func()
+	// Deploy ingress providers and GWAPI implementation asynchronously.
+	var resources []Resource
 
+	for _, p := range tc.Providers {
+		var r Resource
 		switch p {
 		case "ingress-nginx":
-			key = "ingress-nginx"
 			ns := fmt.Sprintf("%s-ingress-nginx", e2ePrefix)
-			installFunc = func() func() {
-				logger := &StdLogger{}
+			r = globalResourceManager.Acquire("ingress-nginx", func() CleanupFunc {
 				return deployIngressNginx(ctx, logger, k8sClient, kubeconfig, ns, skipCleanup)
-			}
+			})
 		default:
 			t.Fatalf("Unknown ingress provider: %s", p)
 		}
-		release := globalResourceManager.Acquire(key, installFunc)
-		t.Cleanup(release)
+		resources = append(resources, r)
 	}
 
-	// Deploy a GWAPI implementation.
-	// TODO: Parallelize to save time.
 	if tc.GatewayImplementation != "" {
-		var key string
-		var installFunc func() func()
-
+		var r Resource
 		switch tc.GatewayImplementation {
 		case "istio":
-			key = "istio"
 			ns := fmt.Sprintf("%s-istio-system", e2ePrefix)
-			installFunc = func() func() {
-				logger := &StdLogger{}
+			r = globalResourceManager.Acquire("istio", func() CleanupFunc {
 				return deployGatewayAPIIstio(ctx, logger, k8sClient, kubeconfig, ns, skipCleanup)
-			}
+			})
 		default:
 			t.Fatalf("Unknown Gateway Implementation: %s", tc.GatewayImplementation)
 		}
-		release := globalResourceManager.Acquire(key, installFunc)
-		t.Cleanup(release)
+		resources = append(resources, r)
+	}
+
+	// Register a single cleanup that runs all cleanups in parallel.
+	t.Cleanup(func() {
+		var doneChans []<-chan struct{}
+		for _, r := range resources {
+			doneChans = append(doneChans, r.Cleanup())
+		}
+		for _, ch := range doneChans {
+			<-ch
+		}
+	})
+
+	for _, r := range resources {
+		r.Wait()
 	}
 
 	// Deploy a dummy app.
