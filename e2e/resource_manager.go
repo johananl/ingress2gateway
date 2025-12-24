@@ -4,58 +4,114 @@ import (
 	"sync"
 )
 
-type ResourceManager struct {
-	mu        sync.Mutex
-	resources map[string]*resourceState
-}
-
-type resourceState struct {
-	cleanup func()
-	count   int
-}
-
 var globalResourceManager = &ResourceManager{
 	resources: make(map[string]*resourceState),
 }
 
-// Acquire acquires a resource. If it's not initialized, installFunc is called.
-// installFunc should return a cleanup function.
-// Returns a release function that should be called when the resource is no longer needed.
-func (rm *ResourceManager) Acquire(key string, installFunc func() func()) func() {
+// ResourceManager manages shared resources used by tests. It allows safe reuse of resources which
+// have expensive setup and/or teardown by multiple concurrent tests.
+type ResourceManager struct {
+	// The methods on this type are designed to return immediately: Any long-running operation
+	// should run asynchronously. The mutex is used only for thread-safe access to the internal
+	// state and is NOT designed to remain locked while a long-running resource operation is
+	// executing.
+	mu        sync.Mutex
+	resources map[string]*resourceState
+}
+
+// Acquire returns a shared resource identified by key.
+//
+// If the resource does not exist, install is called asynchronously to create it. The returned
+// Resource allows callers to wait for installation to complete and to trigger cleanup. Subsequent calls with the same key return
+// immediately without calling install again.
+//
+// Each caller MUST call the Cleanup() method on the returned Resource to ensure resource release
+// takes place.
+func (rm *ResourceManager) Acquire(key string, install InstallFunc) Resource {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 
-	state, ok := rm.resources[key]
-	if !ok {
-		cleanup := installFunc()
+	state, exists := rm.resources[key]
+	if !exists {
 		state = &resourceState{
-			cleanup: cleanup,
-			count:   0,
+			ready: make(chan struct{}),
+			count: 0,
 		}
 		rm.resources[key] = state
+
+		// Run installation asynchronously.
+		go func() {
+			defer close(state.ready)
+			state.cleanup = install()
+		}()
 	}
 	state.count++
 
-	return func() {
-		rm.Release(key)
+	var once sync.Once // Protect against multiple cleanups by same caller
+	var done <-chan struct{}
+
+	return Resource{
+		Cleanup: func() <-chan struct{} {
+			once.Do(func() {
+				done = rm.release(key)
+			})
+			return done
+		},
+		Wait: func() {
+			<-state.ready
+		},
 	}
 }
 
-func (rm *ResourceManager) Release(key string) {
-	rm.mu.Lock()
-	defer rm.mu.Unlock()
+// Decrements the reference count for a resource and triggers cleanup when the count
+// reaches zero. It returns a channel that is closed when cleanup completes.
+func (rm *ResourceManager) release(key string) <-chan struct{} {
+	done := make(chan struct{})
 
-	state, ok := rm.resources[key]
-	if !ok {
-		// Should not happen if used correctly.
-		return
-	}
+	go func() {
+		defer close(done)
 
-	state.count--
-	if state.count <= 0 {
-		if state.cleanup != nil {
-			state.cleanup()
+		rm.mu.Lock()
+		state, ok := rm.resources[key]
+		if !ok {
+			rm.mu.Unlock()
+			return
 		}
-		delete(rm.resources, key)
-	}
+
+		state.count--
+		if state.count <= 0 {
+			delete(rm.resources, key)
+			rm.mu.Unlock()
+			// Wait for installation to complete before cleanup, then run cleanup outside the lock.
+			<-state.ready
+			if state.cleanup != nil {
+				state.cleanup()
+			}
+		} else {
+			rm.mu.Unlock()
+		}
+	}()
+
+	return done
+}
+
+// Resource represents a resource managed by the ResourceManager.
+type Resource struct {
+	// Cleanup releases the resource's underlying resources.
+	Cleanup func() <-chan struct{}
+	// Wait blocks until the resource is installed and ready for use.
+	Wait func()
+}
+
+// InstallFunc is a synchronous install function which returns a synchronous cleanup function.
+type InstallFunc func() CleanupFunc
+
+// CleanupFunc is a function which contains logic for cleaning up a resource.
+type CleanupFunc func()
+
+// Tracks a shared resource's state.
+type resourceState struct {
+	cleanup CleanupFunc
+	ready   chan struct{} // Closed when installation completes
+	count   int           // Reference count
 }
