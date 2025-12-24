@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"context"
+	"testing"
 
 	"helm.sh/helm/v4/pkg/cli"
 	"k8s.io/client-go/kubernetes"
@@ -14,7 +15,7 @@ const (
 
 func deployIngressNginx(
 	ctx context.Context,
-	t TestingT,
+	t *testing.T,
 	client *kubernetes.Clientset,
 	kubeconfigPath string,
 	namespace string,

@@ -43,7 +43,6 @@ func runTestCase(t *testing.T, tc *TestCase) {
 	t.Parallel()
 
 	ctx := t.Context()
-	logger := &StdLogger{}
 
 	// We deliberately avoid setting a default kubeconfig so that we don't accidentally create e2e
 	// resources on a production cluster.
@@ -78,7 +77,7 @@ func runTestCase(t *testing.T, tc *TestCase) {
 		case "ingress-nginx":
 			ns := fmt.Sprintf("%s-ingress-nginx", e2ePrefix)
 			r = globalResourceManager.Acquire("ingress-nginx", func() CleanupFunc {
-				return deployIngressNginx(ctx, logger, k8sClient, kubeconfig, ns, skipCleanup)
+				return deployIngressNginx(ctx, t, k8sClient, kubeconfig, ns, skipCleanup)
 			})
 		default:
 			t.Fatalf("Unknown ingress provider: %s", p)
@@ -92,7 +91,7 @@ func runTestCase(t *testing.T, tc *TestCase) {
 		case "istio":
 			ns := fmt.Sprintf("%s-istio-system", e2ePrefix)
 			r = globalResourceManager.Acquire("istio", func() CleanupFunc {
-				return deployGatewayAPIIstio(ctx, logger, k8sClient, kubeconfig, ns, skipCleanup)
+				return deployGatewayAPIIstio(ctx, t, k8sClient, kubeconfig, ns, skipCleanup)
 			})
 		default:
 			t.Fatalf("Unknown gateway implementation: %s", tc.GatewayImplementation)
