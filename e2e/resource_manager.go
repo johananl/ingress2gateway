@@ -83,6 +83,7 @@ func (rm *ResourceManager) release(key string) <-chan struct{} {
 			delete(rm.resources, key)
 			rm.mu.Unlock()
 			// Wait for installation to complete before cleanup, then run cleanup outside the lock.
+			// TODO: Potential race. Another caller could try to acquire here.
 			<-state.ready
 			if state.cleanup != nil {
 				state.cleanup()

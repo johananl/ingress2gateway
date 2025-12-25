@@ -39,6 +39,13 @@ type TestCase struct {
 	Verifiers             map[string][]Verifier
 }
 
+// TODO: Refactor error handling. Helpers should accept a logger interface and return errors. No
+// t.Errorf/t.Fatalf in helpers. Helpers should never fail the test case themselves.
+
+// TODO: Context isn't used in deployIngressNginx. Ensure all helpers respect context.
+
+// TODO: Move CRDs and MetalLB to resource manager and avoid TestMain?
+
 func runTestCase(t *testing.T, tc *TestCase) {
 	t.Parallel()
 
