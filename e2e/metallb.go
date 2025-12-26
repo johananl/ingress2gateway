@@ -5,15 +5,15 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
-	"strings"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"helm.sh/helm/v4/pkg/cli"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 )
@@ -27,36 +27,75 @@ const (
 	metalLBNamespace    = "metallb-system"
 )
 
-func deployMetalLB(ctx context.Context, t TestingT, client *kubernetes.Clientset, dynamicClient dynamic.Interface, kubeconfigPath string, skipCleanup bool) func() {
-	t.Logf("Deploying metallb chart %s", metalLBChartVersion)
+func deployMetalLB(
+	ctx context.Context,
+	log Logger,
+	client *kubernetes.Clientset,
+	dynamicClient dynamic.Interface,
+	kubeconfigPath string,
+	skipCleanup bool,
+) (func(), error) {
+	log.Logf("Deploying metallb chart %s", metalLBChartVersion)
 
 	settings := cli.New()
 	settings.KubeConfig = kubeconfigPath
 
-	installChart(t, settings, metalLBChartRepo, "metallb", "metallb", metalLBChartVersion, metalLBNamespace, true, nil)
+	if err := installChart(
+		ctx,
+		log,
+		settings,
+		metalLBChartRepo,
+		"metallb",
+		"metallb",
+		metalLBChartVersion,
+		metalLBNamespace,
+		true,
+		nil,
+	); err != nil {
+		return nil, fmt.Errorf("installing chart: %w", err)
+	}
 
-	cidr := detectNodeCIDR(ctx, t, client)
-	start, end := getIPRange(t, cidr)
-	t.Logf("Configuring MetalLB with IP range: %s-%s", start, end)
+	cidr, err := detectNodeCIDR(ctx, log, client)
+	if err != nil {
+		return nil, fmt.Errorf("detecting node CIDR: %w", err)
+	}
 
-	applyMetalLBConfig(ctx, t, dynamicClient, start, end)
+	start, end, err := getIPRange(cidr)
+	if err != nil {
+		return nil, fmt.Errorf("calculating IP range: %w", err)
+	}
+
+	log.Logf("Configuring MetalLB with IP range: %s-%s", start, end)
+
+	if err := applyMetalLBConfig(ctx, log, dynamicClient, start, end); err != nil {
+		return nil, fmt.Errorf("applying MetalLB config: %w", err)
+	}
 
 	return func() {
 		if skipCleanup {
-			t.Logf("Skipping cleanup of metallb")
+			log.Logf("Skipping cleanup of MetalLB")
 			return
 		}
-		t.Logf("Cleaning up metallb")
-		uninstallChart(t, settings, "metallb", metalLBNamespace)
+		log.Logf("Cleaning up MetalLB")
+		if err := uninstallChart(ctx, log, settings, "metallb", metalLBNamespace); err != nil {
+			log.Logf("Uninstalling chart: %v", err)
+		}
 
-		deleteNamespaceAndWait(ctx, t, client, metalLBNamespace)
-	}
+		if err := deleteNamespaceAndWait(ctx, log, client, metalLBNamespace); err != nil {
+			log.Logf("Deleting namespace: %v", err)
+		}
+	}, nil
 }
 
-func detectNodeCIDR(ctx context.Context, t TestingT, client *kubernetes.Clientset) string {
+func detectNodeCIDR(ctx context.Context, log Logger, client *kubernetes.Clientset) (string, error) {
 	nodes, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-	require.NoError(t, err)
-	require.NotEmpty(t, nodes.Items)
+	if err != nil {
+		return "", fmt.Errorf("listing nodes: %w", err)
+	}
+
+	if len(nodes.Items) == 0 {
+		return "", fmt.Errorf("no nodes found")
+	}
 
 	var internalIP string
 	for _, node := range nodes.Items {
@@ -74,19 +113,29 @@ func detectNodeCIDR(ctx context.Context, t TestingT, client *kubernetes.Clientse
 	}
 
 	if internalIP == "" {
-		t.Fatalf("Could not find node with IPv4 InternalIP")
+		return "", fmt.Errorf("could not find node with IPv4 InternalIP")
 	}
 
 	localAddr, err := findEgressNIC(internalIP)
-	require.NoError(t, err)
-	require.NotNil(t, localAddr)
+	if err != nil {
+		return "", fmt.Errorf("finding egress NIC: %w", err)
+	}
+
+	if localAddr == nil {
+		return "", fmt.Errorf("nil local address")
+	}
 
 	ipNet, err := ipNetworkForIP(localAddr.IP)
-	require.NoError(t, err)
-	require.NotNil(t, ipNet)
+	if err != nil {
+		return "", fmt.Errorf("getting IP network from local address: %w", err)
+	}
+
+	if ipNet == nil {
+		return "", fmt.Errorf("nil IP network")
+	}
 
 	ones, _ := ipNet.Mask.Size()
-	return fmt.Sprintf("%s/%d", internalIP, ones)
+	return fmt.Sprintf("%s/%d", internalIP, ones), nil
 }
 
 // Searches the local network interfaces for an interface with the specified IP and returns the
@@ -128,28 +177,28 @@ func findEgressNIC(ip string) (*net.UDPAddr, error) {
 
 // Accepts a CIDR, carves out a range to be used by MetalLB and returns that range as a start IP
 // and end IP.
-func getIPRange(t TestingT, cidr string) (string, string) {
+func getIPRange(cidr string) (string, string, error) {
 	// Compute the network address (first address in CIDR).
 	_, ipnet, err := net.ParseCIDR(cidr)
 	if err != nil {
-		t.Fatalf("Invalid CIDR: %s", cidr)
+		return "", "", fmt.Errorf("invalid CIDR: %s", cidr)
 	}
 
 	// Convert network address to an IP we can do bitwise operations on.
 	ip4 := ipnet.IP.To4()
 	if ip4 == nil {
-		t.Fatalf("IPv6 support not implemented")
+		return "", "", fmt.Errorf("IPv6 support not implemented")
 	}
 
 	// Compute the subnet mask.
 	ones, bits := ipnet.Mask.Size()
 	if bits != 32 {
-		t.Fatalf("IPv6 support not implemented")
+		return "", "", fmt.Errorf("IPv6 support not implemented")
 	}
 
 	// Ensure the CIDR is big enough.
 	if ones > 26 {
-		t.Fatalf("Subnet too small for MetalLB range")
+		return "", "", fmt.Errorf("subnet too small for MetalLB range")
 	}
 
 	// Compute the broadcast address (last address in CIDR).
@@ -173,10 +222,10 @@ func getIPRange(t TestingT, cidr string) (string, string) {
 	endIP := make(net.IP, 4)
 	binary.BigEndian.PutUint32(endIP, endVal)
 
-	return startIP.String(), endIP.String()
+	return startIP.String(), endIP.String(), nil
 }
 
-func applyMetalLBConfig(ctx context.Context, t TestingT, client dynamic.Interface, start, end string) {
+func applyMetalLBConfig(ctx context.Context, log Logger, client dynamic.Interface, start, end string) error {
 	ipAddressPool := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "metallb.io/v1beta1",
@@ -207,28 +256,33 @@ func applyMetalLBConfig(ctx context.Context, t TestingT, client dynamic.Interfac
 	gvrPool := schema.GroupVersionResource{Group: "metallb.io", Version: "v1beta1", Resource: "ipaddresspools"}
 	gvrAdv := schema.GroupVersionResource{Group: "metallb.io", Version: "v1beta1", Resource: "l2advertisements"}
 
-	require.Eventually(t, func() bool {
+	if err := wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
 		_, err := client.Resource(gvrPool).Namespace(metalLBNamespace).Create(ctx, ipAddressPool, metav1.CreateOptions{})
 		if err != nil {
-			// If it already exists, we can ignore or update. For now, let's assume clean state or ignore exists.
-			if strings.Contains(err.Error(), "already exists") {
-				return true
+			if errors.IsAlreadyExists(err) {
+				return true, nil
 			}
-			t.Logf("Creating IPAddressPool: %v", err)
-			return false
+			log.Logf("Creating IPAddressPool: %v", err)
+			return false, nil
 		}
-		return true
-	}, 2*time.Minute, 5*time.Second, "Failed to create IPAddressPool")
+		return true, nil
+	}); err != nil {
+		return fmt.Errorf("creating IPAddressPool: %w", err)
+	}
 
-	require.Eventually(t, func() bool {
+	if err := wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
 		_, err := client.Resource(gvrAdv).Namespace(metalLBNamespace).Create(ctx, l2Advertisement, metav1.CreateOptions{})
 		if err != nil {
-			if strings.Contains(err.Error(), "already exists") {
-				return true
+			if errors.IsAlreadyExists(err) {
+				return true, nil
 			}
-			t.Logf("Creating L2Advertisement: %v", err)
-			return false
+			log.Logf("Creating L2Advertisement: %v", err)
+			return false, nil
 		}
-		return true
-	}, 2*time.Minute, 5*time.Second, "Failed to create L2Advertisement")
+		return true, nil
+	}); err != nil {
+		return fmt.Errorf("creating L2Advertisement: %w", err)
+	}
+
+	return nil
 }

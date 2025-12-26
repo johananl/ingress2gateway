@@ -1,10 +1,11 @@
 package e2e
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"helm.sh/helm/v4/pkg/action"
 	"helm.sh/helm/v4/pkg/chart/loader"
 	"helm.sh/helm/v4/pkg/cli"
@@ -12,7 +13,8 @@ import (
 )
 
 func installChart(
-	t TestingT,
+	ctx context.Context,
+	log Logger,
 	settings *cli.EnvSettings,
 	repoURL string,
 	releaseName string,
@@ -21,17 +23,17 @@ func installChart(
 	namespace string,
 	createNamespace bool,
 	values map[string]interface{},
-) {
+) error {
 	cfg := new(action.Configuration)
 	if err := cfg.Init(settings.RESTClientGetter(), namespace, os.Getenv("HELM_DRIVER")); err != nil {
-		t.Fatalf("Initializing helm config: %v", err)
+		return fmt.Errorf("initializing helm config: %w", err)
 	}
 
 	// Check if release already exists.
 	status := action.NewStatus(cfg)
 	if _, err := status.Run(releaseName); err == nil {
-		t.Logf("Release %q already exists, skipping installation", releaseName)
-		return
+		log.Logf("Release %q already exists, skipping installation", releaseName)
+		return nil
 	}
 
 	install := action.NewInstall(cfg)
@@ -43,21 +45,29 @@ func installChart(
 	install.RepoURL = repoURL
 	install.Version = version
 
-	cp, err := locateChartWithRetry(t, install, chartName, settings)
-	require.NoError(t, err)
+	cp, err := locateChartWithRetry(ctx, log, install, chartName, settings)
+	if err != nil {
+		return fmt.Errorf("locating chart: %w", err)
+	}
 
 	chartRequested, err := loader.Load(cp)
-	require.NoError(t, err)
+	if err != nil {
+		return fmt.Errorf("loading chart: %w", err)
+	}
 
 	_, err = install.Run(chartRequested, values)
-	require.NoError(t, err)
+	if err != nil {
+		return fmt.Errorf("installing chart: %w", err)
+	}
+
+	return nil
 }
 
-func uninstallChart(t TestingT, settings *cli.EnvSettings, releaseName, namespace string) {
+func uninstallChart(ctx context.Context, log Logger, settings *cli.EnvSettings, releaseName, namespace string) error {
 	cfg := new(action.Configuration)
+
 	if err := cfg.Init(settings.RESTClientGetter(), namespace, os.Getenv("HELM_DRIVER")); err != nil {
-		t.Errorf("Initializing helm config: %v", err)
-		return
+		return fmt.Errorf("Initializing helm config: %w", err)
 	}
 
 	uninstall := action.NewUninstall(cfg)
@@ -71,11 +81,19 @@ func uninstallChart(t TestingT, settings *cli.EnvSettings, releaseName, namespac
 
 	_, err := uninstall.Run(releaseName)
 	if err != nil {
-		t.Errorf("Uninstalling %s: %v", releaseName, err)
+		return fmt.Errorf("Uninstalling %s: %w", releaseName, err)
 	}
+
+	return nil
 }
 
-func locateChartWithRetry(t TestingT, install *action.Install, chartName string, settings *cli.EnvSettings) (string, error) {
+func locateChartWithRetry(
+	ctx context.Context,
+	log Logger,
+	install *action.Install,
+	chartName string,
+	settings *cli.EnvSettings,
+) (string, error) {
 	var cp string
 	var err error
 	const maxRetries = 5
@@ -91,7 +109,7 @@ func locateChartWithRetry(t TestingT, install *action.Install, chartName string,
 		// fragile string parsing, we treat all errors as transient failures. This isn't a big
 		// problem since the whole retry process is fairly short.
 
-		t.Logf("Locating chart (attempt %d/%d): %v", i+1, maxRetries, err)
+		log.Logf("Locating chart (attempt %d/%d): %v", i+1, maxRetries, err)
 		time.Sleep(2 * time.Second)
 	}
 

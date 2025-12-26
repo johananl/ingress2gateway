@@ -39,11 +39,16 @@ func TestMain(m *testing.M) {
 
 	cleanupMetalLB := func() {} // Default to a no-op function
 	if shouldDeployMetalLB {
-		cleanupMetalLB = deployMetalLB(ctx, logger, k8sClient, dynamicClient, kubeconfig, skipCleanup)
+		cleanupMetalLB, err = deployMetalLB(ctx, logger, k8sClient, dynamicClient, kubeconfig, skipCleanup)
+		if err != nil {
+			logger.Fatalf("Deploying MetalLB: %v", err)
+		}
 	}
 
-	logger.Logf("Deploying Gateway API CRDs")
-	cleanupCRDs := deployCRDs(ctx, logger, apiextensionsClient, skipCleanup)
+	cleanupCRDs, err := deployCRDs(ctx, logger, apiextensionsClient, skipCleanup)
+	if err != nil {
+		logger.Fatalf("Deploying Gateway API CRDs: %v", err)
+	}
 
 	// Run test cases.
 	exitCode := m.Run()
