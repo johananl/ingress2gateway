@@ -55,7 +55,7 @@ func installChart(
 		return fmt.Errorf("loading chart: %w", err)
 	}
 
-	_, err = install.Run(chartRequested, values)
+	_, err = install.RunWithContext(ctx, chartRequested, values)
 	if err != nil {
 		return fmt.Errorf("installing chart: %w", err)
 	}
@@ -64,6 +64,11 @@ func installChart(
 }
 
 func uninstallChart(ctx context.Context, log Logger, settings *cli.EnvSettings, releaseName, namespace string) error {
+	// Helm's Uninstall action doesn't support context so we can only check before starting.
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("context canceled before uninstall: %w", err)
+	}
+
 	cfg := new(action.Configuration)
 
 	if err := cfg.Init(settings.RESTClientGetter(), namespace, os.Getenv("HELM_DRIVER")); err != nil {
