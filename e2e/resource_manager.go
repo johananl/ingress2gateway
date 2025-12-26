@@ -42,7 +42,12 @@ func (rm *ResourceManager) Acquire(key string, install InstallFunc) Resource {
 		// Run installation asynchronously.
 		go func() {
 			defer close(state.ready)
-			state.cleanup = install()
+			cleanup, err := install()
+			if err != nil {
+				state.err = err
+				return
+			}
+			state.cleanup = cleanup
 		}()
 	}
 	state.count++
@@ -57,8 +62,9 @@ func (rm *ResourceManager) Acquire(key string, install InstallFunc) Resource {
 			})
 			return done
 		},
-		Wait: func() {
+		Wait: func() error {
 			<-state.ready
+			return state.err
 		},
 	}
 }
@@ -100,12 +106,14 @@ func (rm *ResourceManager) release(key string) <-chan struct{} {
 type Resource struct {
 	// Cleanup releases the resource's underlying resources.
 	Cleanup func() <-chan struct{}
-	// Wait blocks until the resource is installed and ready for use.
-	Wait func()
+	// Wait blocks until the resource is installed and ready for use. If there was an error during
+	// the installation, the error is returned.
+	Wait func() error
 }
 
-// InstallFunc is a synchronous install function which returns a synchronous cleanup function.
-type InstallFunc func() CleanupFunc
+// InstallFunc is a synchronous install function which returns a synchronous cleanup function or an
+// installation error.
+type InstallFunc func() (CleanupFunc, error)
 
 // CleanupFunc is a function which contains logic for cleaning up a resource.
 type CleanupFunc func()
@@ -114,5 +122,6 @@ type CleanupFunc func()
 type resourceState struct {
 	cleanup CleanupFunc
 	ready   chan struct{} // Closed when installation completes
+	err     error         // An installation error
 	count   int           // Reference count
 }

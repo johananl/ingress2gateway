@@ -78,12 +78,8 @@ func runTestCase(t *testing.T, tc *TestCase) {
 		switch p {
 		case "ingress-nginx":
 			ns := fmt.Sprintf("%s-ingress-nginx", e2ePrefix)
-			r = globalResourceManager.Acquire("ingress-nginx", func() CleanupFunc {
-				cleanup, err := deployIngressNginx(ctx, t, k8sClient, kubeconfig, ns, skipCleanup)
-				if err != nil {
-					t.Fatalf("Deploying ingress-nginx: %v", err)
-				}
-				return cleanup
+			r = globalResourceManager.Acquire("ingress-nginx", func() (CleanupFunc, error) {
+				return deployIngressNginx(ctx, t, k8sClient, kubeconfig, ns, skipCleanup)
 			})
 		default:
 			t.Fatalf("Unknown ingress provider: %s", p)
@@ -96,12 +92,8 @@ func runTestCase(t *testing.T, tc *TestCase) {
 		switch tc.GatewayImplementation {
 		case "istio":
 			ns := fmt.Sprintf("%s-istio-system", e2ePrefix)
-			r = globalResourceManager.Acquire("istio", func() CleanupFunc {
-				cleanup, err := deployGatewayAPIIstio(ctx, t, k8sClient, kubeconfig, ns, skipCleanup)
-				if err != nil {
-					t.Fatalf("Deploying istio: %v", err)
-				}
-				return cleanup
+			r = globalResourceManager.Acquire("istio", func() (CleanupFunc, error) {
+				return deployGatewayAPIIstio(ctx, t, k8sClient, kubeconfig, ns, skipCleanup)
 			})
 		default:
 			t.Fatalf("Unknown gateway implementation: %s", tc.GatewayImplementation)
@@ -121,7 +113,9 @@ func runTestCase(t *testing.T, tc *TestCase) {
 	})
 
 	for _, r := range resources {
-		r.Wait()
+		if err := r.Wait(); err != nil {
+			t.Fatalf("Resource installation failed: %v", err)
+		}
 	}
 
 	// Deploy a dummy app.
