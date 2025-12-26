@@ -38,8 +38,6 @@ type TestCase struct {
 	Verifiers             map[string][]Verifier
 }
 
-// TODO: Context isn't used in deployIngressNginx. Ensure all helpers respect context.
-
 // TODO: Move CRDs and MetalLB to resource manager and avoid TestMain?
 
 func runTestCase(t *testing.T, tc *TestCase) {
