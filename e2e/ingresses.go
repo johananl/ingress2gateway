@@ -2,11 +2,10 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"net"
-	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -14,35 +13,40 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func createIngresses(ctx context.Context, t *testing.T, client *kubernetes.Clientset, ns string, ingresses []*networkingv1.Ingress, skipCleanup bool) func() {
+func createIngresses(ctx context.Context, log Logger, client *kubernetes.Clientset, ns string, ingresses []*networkingv1.Ingress, skipCleanup bool) (func(), error) {
 	for _, ingress := range ingresses {
 		y, err := toYAML(ingress)
-		require.NoError(t, err)
-		t.Logf("Creating ingress:\n%s", y)
+		if err != nil {
+			return nil, fmt.Errorf("converting ingress to YAML: %w", err)
+		}
+
+		log.Logf("Creating ingress:\n%s", y)
 
 		_, err = client.NetworkingV1().Ingresses(ns).Create(ctx, ingress, metav1.CreateOptions{})
-		require.NoError(t, err)
+		if err != nil {
+			return nil, fmt.Errorf("creating ingress: %w", err)
+		}
 	}
 
 	return func() {
 		if skipCleanup {
-			t.Log("Skipping cleanup of ingresses")
+			log.Logf("Skipping cleanup of ingresses")
 			return
 		}
 		for _, ingress := range ingresses {
-			t.Logf("Deleting ingress %s", ingress.Name)
+			log.Logf("Deleting ingress %s", ingress.Name)
 			err := client.NetworkingV1().Ingresses(ns).Delete(context.Background(), ingress.Name, metav1.DeleteOptions{})
 			if err != nil {
-				t.Errorf("Deleting ingress %s: %v", ingress.Name, err)
+				log.Logf("Deleting ingress %s: %v", ingress.Name, err)
 			}
 		}
-	}
+	}, nil
 }
 
-func waitForIngressAddresses(ctx context.Context, t *testing.T, client *kubernetes.Clientset, ns string, ingresses []*networkingv1.Ingress) map[types.NamespacedName]net.IP {
+func waitForIngressAddresses(ctx context.Context, log Logger, client *kubernetes.Clientset, ns string, ingresses []*networkingv1.Ingress) (map[types.NamespacedName]net.IP, error) {
 	addresses := map[types.NamespacedName]net.IP{}
 	for _, ingress := range ingresses {
-		t.Logf("Waiting for ingress %s to get an address", ingress.Name)
+		log.Logf("Waiting for ingress %s to get an address", ingress.Name)
 		var address string
 		err := wait.PollUntilContextTimeout(ctx, 1*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
 			ing, err := client.NetworkingV1().Ingresses(ns).Get(ctx, ingress.Name, metav1.GetOptions{})
@@ -61,10 +65,13 @@ func waitForIngressAddresses(ctx context.Context, t *testing.T, client *kubernet
 			}
 			return false, nil
 		})
-		require.NoError(t, err)
+		if err != nil {
+			return nil, fmt.Errorf("waiting for ingress %s to get an address: %w", ingress.Name, err)
+		}
+
 		nn := types.NamespacedName{Namespace: ns, Name: ingress.Name}
 		addresses[nn] = net.ParseIP(address)
 	}
 
-	return addresses
+	return addresses, nil
 }

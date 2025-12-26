@@ -3,7 +3,6 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"log"
 	"math/rand"
 	"net"
 	"os"
@@ -39,9 +38,6 @@ type TestCase struct {
 	Verifiers             map[string][]Verifier
 }
 
-// TODO: Refactor error handling. Helpers should accept a logger interface and return errors. No
-// t.Errorf/t.Fatalf in helpers. Helpers should never fail the test case themselves.
-
 // TODO: Context isn't used in deployIngressNginx. Ensure all helpers respect context.
 
 // TODO: Move CRDs and MetalLB to resource manager and avoid TestMain?
@@ -72,7 +68,8 @@ func runTestCase(t *testing.T, tc *TestCase) {
 	prefix := fmt.Sprintf("%s-%s", e2ePrefix, randString(5, seed))
 
 	appNS := fmt.Sprintf("%s-app", prefix)
-	cleanupNS := createNamespace(ctx, t, k8sClient, appNS, skipCleanup)
+	cleanupNS, err := createNamespace(ctx, t, k8sClient, appNS, skipCleanup)
+	require.NoError(t, err)
 	t.Cleanup(cleanupNS)
 
 	// Deploy ingress providers and GWAPI implementation asynchronously.
@@ -84,7 +81,11 @@ func runTestCase(t *testing.T, tc *TestCase) {
 		case "ingress-nginx":
 			ns := fmt.Sprintf("%s-ingress-nginx", e2ePrefix)
 			r = globalResourceManager.Acquire("ingress-nginx", func() CleanupFunc {
-				return deployIngressNginx(ctx, t, k8sClient, kubeconfig, ns, skipCleanup)
+				cleanup, err := deployIngressNginx(ctx, t, k8sClient, kubeconfig, ns, skipCleanup)
+				if err != nil {
+					t.Fatalf("Deploying ingress-nginx: %v", err)
+				}
+				return cleanup
 			})
 		default:
 			t.Fatalf("Unknown ingress provider: %s", p)
@@ -98,7 +99,11 @@ func runTestCase(t *testing.T, tc *TestCase) {
 		case "istio":
 			ns := fmt.Sprintf("%s-istio-system", e2ePrefix)
 			r = globalResourceManager.Acquire("istio", func() CleanupFunc {
-				return deployGatewayAPIIstio(ctx, t, k8sClient, kubeconfig, ns, skipCleanup)
+				cleanup, err := deployGatewayAPIIstio(ctx, t, k8sClient, kubeconfig, ns, skipCleanup)
+				if err != nil {
+					t.Fatalf("Deploying istio: %v", err)
+				}
+				return cleanup
 			})
 		default:
 			t.Fatalf("Unknown gateway implementation: %s", tc.GatewayImplementation)
@@ -122,16 +127,21 @@ func runTestCase(t *testing.T, tc *TestCase) {
 	}
 
 	// Deploy a dummy app.
-	cleanupDummyApp := createDummyApp(ctx, t, k8sClient, appNS, skipCleanup)
+	cleanupDummyApp, err := createDummyApp(ctx, t, k8sClient, appNS, skipCleanup)
+	if err != nil {
+		t.Fatalf("Creating dummy app: %v", err)
+	}
 	t.Cleanup(cleanupDummyApp)
 
 	// Create ingress resources.
 	// TODO: Prefix ingresses to improve isolation?
-	cleanupIngresses := createIngresses(ctx, t, k8sClient, appNS, tc.Ingresses, skipCleanup)
+	cleanupIngresses, err := createIngresses(ctx, t, k8sClient, appNS, tc.Ingresses, skipCleanup)
+	require.NoError(t, err)
 	t.Cleanup(cleanupIngresses)
 
 	// Wait for ingresses to get IP addresses.
-	addresses := waitForIngressAddresses(ctx, t, k8sClient, appNS, tc.Ingresses)
+	addresses, err := waitForIngressAddresses(ctx, t, k8sClient, appNS, tc.Ingresses)
+	require.NoError(t, err)
 	t.Logf("Got ingress addresses: %v", addresses)
 
 	// Run verifiers against ingresses.
@@ -159,11 +169,17 @@ func runTestCase(t *testing.T, tc *TestCase) {
 	}
 
 	// Create Gateway API resources.
-	cleanupGatewayResources := createGatewayResources(ctx, t, gwClient, appNS, res, skipCleanup)
+	cleanupGatewayResources, err := createGatewayResources(ctx, t, gwClient, appNS, res, skipCleanup)
+	if err != nil {
+		t.Fatalf("Creating gateway resources: %v", err)
+	}
 	t.Cleanup(cleanupGatewayResources)
 
 	// Wait for gateways to get IP addresses.
-	gwAddresses := waitForGatewayAddresses(ctx, t, gwClient, appNS, getGateways(res))
+	gwAddresses, err := waitForGatewayAddresses(ctx, t, gwClient, appNS, getGateways(res))
+	if err != nil {
+		t.Fatalf("Waiting for gateway addresses: %v", err)
+	}
 	t.Logf("Got gateway addresses: %v", gwAddresses)
 
 	// Run verifier against GWAPI implementation.
@@ -221,34 +237,6 @@ func verifyGatewayResources(ctx context.Context, t *testing.T, tc *TestCase, nam
 	}
 }
 
-// TestingT is a subset of testing.T that we use in our helpers.
-// It allows us to pass *testing.T or a custom logger (for TestMain).
-type TestingT interface {
+type Logger interface {
 	Logf(format string, args ...interface{})
-	Fatalf(format string, args ...interface{})
-	Errorf(format string, args ...interface{})
-	FailNow()
-	Helper()
 }
-
-// StdLogger implements TestingT using the standard library's log package. It's intended to be used
-// in TestMain.
-type StdLogger struct{}
-
-func (l *StdLogger) Logf(format string, args ...interface{}) {
-	log.Printf(format, args...)
-}
-
-func (l *StdLogger) Fatalf(format string, args ...interface{}) {
-	log.Fatalf(format, args...)
-}
-
-func (l *StdLogger) Errorf(format string, args ...interface{}) {
-	log.Printf("ERROR: "+format, args...)
-}
-
-func (l *StdLogger) FailNow() {
-	log.Fatal("FAIL NOW")
-}
-
-func (l *StdLogger) Helper() {}

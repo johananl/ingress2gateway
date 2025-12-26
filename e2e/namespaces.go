@@ -2,10 +2,9 @@ package e2e
 
 import (
 	"context"
-	"testing"
+	"fmt"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -13,47 +12,50 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func createNamespace(ctx context.Context, t *testing.T, client *kubernetes.Clientset, ns string, skipCleanup bool) func() {
+func createNamespace(ctx context.Context, log Logger, client *kubernetes.Clientset, ns string, skipCleanup bool) (func(), error) {
 	// Check if namespace already exists. This should be very rare since we use a random suffix,
 	// but we check just in case to avoid flaky tests do to conflicts.
 	_, err := client.CoreV1().Namespaces().Get(ctx, ns, metav1.GetOptions{})
 	if err == nil {
-		t.Fatalf("Namespace %s already exists", ns)
+		return nil, fmt.Errorf("namespace %s already exists", ns)
 	}
 
-	t.Logf("Creating namespace %s", ns)
+	log.Logf("Creating namespace %s", ns)
 	_, err = client.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: ns,
 		},
 	}, metav1.CreateOptions{})
-	require.NoError(t, err)
+	if err != nil {
+		return nil, fmt.Errorf("creating namespace %s: %w", ns, err)
+	}
 
 	return func() {
 		if skipCleanup {
-			t.Logf("Skipping cleanup of namespace %s", ns)
+			log.Logf("Skipping cleanup of namespace %s", ns)
 			return
 		}
-		t.Logf("Cleaning up namespace %s", ns)
-		deleteNamespaceAndWait(context.Background(), t, client, ns)
-	}
+		log.Logf("Cleaning up namespace %s", ns)
+		if err := deleteNamespaceAndWait(ctx, log, client, ns); err != nil {
+			log.Logf("Deleting namespace %s: %v", ns, err)
+		}
+	}, nil
 }
 
-func deleteNamespaceAndWait(ctx context.Context, t TestingT, client *kubernetes.Clientset, ns string) {
-	err := client.CoreV1().Namespaces().Delete(ctx, ns, metav1.DeleteOptions{})
-	if err != nil {
-		t.Logf("Deleting namespace %s: %v", ns, err)
-		return
+func deleteNamespaceAndWait(ctx context.Context, log Logger, client *kubernetes.Clientset, ns string) error {
+	if err := client.CoreV1().Namespaces().Delete(ctx, ns, metav1.DeleteOptions{}); err != nil {
+		return fmt.Errorf("deleting namespace %s: %w", ns, err)
 	}
 
-	err = wait.PollUntilContextTimeout(ctx, 1*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+	if err := wait.PollUntilContextTimeout(ctx, 1*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
 		_, err := client.CoreV1().Namespaces().Get(ctx, ns, metav1.GetOptions{})
 		if errors.IsNotFound(err) {
 			return true, nil
 		}
 		return false, err
-	})
-	if err != nil {
-		t.Errorf("Waiting for namespace %s to delete: %v", ns, err)
+	}); err != nil {
+		return fmt.Errorf("waiting for namespace %s to delete: %w", ns, err)
 	}
+
+	return nil
 }

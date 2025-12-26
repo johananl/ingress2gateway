@@ -2,11 +2,11 @@ package e2e
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
 
-	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/yaml"
@@ -35,22 +35,26 @@ func toYAML(obj interface{}) (string, error) {
 	return string(b), nil
 }
 
-func fetchManifests(t TestingT, url string) []byte {
-	t.Logf("Fetching manifests from %s", url)
+func fetchManifests(url string) ([]byte, error) {
 	resp, err := http.Get(url)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, fmt.Errorf("getting manifests: %w", err)
+	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Fetching manifests from %s: %s", url, resp.Status)
+		return nil, fmt.Errorf("unexpected status: %s", resp.Status)
 	}
 
 	data, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	return data
+	if err != nil {
+		return nil, fmt.Errorf("reading response data: %w", err)
+	}
+
+	return data, nil
 }
 
-func decodeManifests(t TestingT, data []byte) []unstructured.Unstructured {
+func decodeManifests(data []byte) ([]unstructured.Unstructured, error) {
 	var out []unstructured.Unstructured
 	decoder := k8syaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
 
@@ -61,12 +65,15 @@ func decodeManifests(t TestingT, data []byte) []unstructured.Unstructured {
 			if err == io.EOF {
 				break
 			}
-			require.NoError(t, err)
+			if err != nil {
+				return nil, fmt.Errorf("decoding object: %w", err)
+			}
 		}
 		if obj.Object == nil {
 			continue
 		}
 		out = append(out, obj)
 	}
-	return out
+
+	return out, nil
 }

@@ -2,7 +2,7 @@ package e2e
 
 import (
 	"context"
-	"testing"
+	"fmt"
 
 	"helm.sh/helm/v4/pkg/cli"
 	"k8s.io/client-go/kubernetes"
@@ -15,27 +15,44 @@ const (
 
 func deployIngressNginx(
 	ctx context.Context,
-	t *testing.T,
+	log Logger,
 	client *kubernetes.Clientset,
 	kubeconfigPath string,
 	namespace string,
 	skipCleanup bool,
-) func() {
-	t.Logf("Deploying ingress-nginx chart %s", ingressNginxChartVersion)
+) (func(), error) {
+	log.Logf("Deploying ingress-nginx chart %s", ingressNginxChartVersion)
 
 	settings := cli.New()
 	settings.KubeConfig = kubeconfigPath
 
-	installChart(t, settings, ingressNginxChartRepo, "ingress-nginx", "ingress-nginx", ingressNginxChartVersion, namespace, true, nil)
+	if err := installChart(
+		ctx,
+		log,
+		settings,
+		ingressNginxChartRepo,
+		"ingress-nginx",
+		"ingress-nginx",
+		ingressNginxChartVersion,
+		namespace,
+		true,
+		nil,
+	); err != nil {
+		return nil, fmt.Errorf("installing chart: %w", err)
+	}
 
 	return func() {
 		if skipCleanup {
-			t.Logf("Skipping cleanup of ingress-nginx")
+			log.Logf("Skipping cleanup of ingress-nginx")
 			return
 		}
-		t.Logf("Cleaning up ingress-nginx")
-		uninstallChart(t, settings, "ingress-nginx", namespace)
+		log.Logf("Cleaning up ingress-nginx")
+		if err := uninstallChart(ctx, log, settings, "ingress-nginx", namespace); err != nil {
+			log.Logf("Uninstalling chart: %v", err)
+		}
 
-		deleteNamespaceAndWait(context.Background(), t, client, namespace)
-	}
+		if err := deleteNamespaceAndWait(ctx, log, client, namespace); err != nil {
+			log.Logf("Deleting namespace: %v", err)
+		}
+	}, nil
 }

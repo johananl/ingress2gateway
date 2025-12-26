@@ -2,9 +2,32 @@ package e2e
 
 import (
 	"context"
+	"log"
 	"os"
 	"testing"
 )
+
+// StdLogger implements TestingT using the standard library's log package. It's intended to be used
+// in TestMain.
+type StdLogger struct{}
+
+func (l *StdLogger) Logf(format string, args ...interface{}) {
+	log.Printf(format, args...)
+}
+
+func (l *StdLogger) Fatalf(format string, args ...interface{}) {
+	log.Fatalf(format, args...)
+}
+
+func (l *StdLogger) Errorf(format string, args ...interface{}) {
+	log.Printf("ERROR: "+format, args...)
+}
+
+func (l *StdLogger) FailNow() {
+	log.Fatal("FAIL NOW")
+}
+
+func (l *StdLogger) Helper() {}
 
 // TestMain wraps all test cases and performs global setup and cleanup operations. Any code before
 // m.Run() is setup code and any code after m.Run() is cleanup code.
@@ -39,11 +62,16 @@ func TestMain(m *testing.M) {
 
 	cleanupMetalLB := func() {} // Default to a no-op function
 	if shouldDeployMetalLB {
-		cleanupMetalLB = deployMetalLB(ctx, logger, k8sClient, dynamicClient, kubeconfig, skipCleanup)
+		cleanupMetalLB, err = deployMetalLB(ctx, logger, k8sClient, dynamicClient, kubeconfig, skipCleanup)
+		if err != nil {
+			logger.Fatalf("Deploying MetalLB: %v", err)
+		}
 	}
 
-	logger.Logf("Deploying Gateway API CRDs")
-	cleanupCRDs := deployCRDs(ctx, logger, apiextensionsClient, skipCleanup)
+	cleanupCRDs, err := deployCRDs(ctx, logger, apiextensionsClient, skipCleanup)
+	if err != nil {
+		logger.Fatalf("Deploying Gateway API CRDs: %v", err)
+	}
 
 	// Run test cases.
 	exitCode := m.Run()

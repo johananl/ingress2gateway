@@ -2,10 +2,9 @@ package e2e
 
 import (
 	"context"
-	"testing"
+	"fmt"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,35 +15,42 @@ import (
 
 const name = "dummy-app"
 
-func createDummyApp(ctx context.Context, t *testing.T, client *kubernetes.Clientset, namespace string, skipCleanup bool) func() {
-	createDummyAppDeployment(ctx, t, client, namespace)
-	createDummyAppService(ctx, t, client, namespace)
+func createDummyApp(ctx context.Context, log Logger, client *kubernetes.Clientset, namespace string, skipCleanup bool) (func(), error) {
+	if err := createDummyAppDeployment(ctx, log, client, namespace); err != nil {
+		return nil, fmt.Errorf("creating deployment: %w", err)
+	}
 
-	waitForDummyApp(ctx, t, client, namespace)
+	if err := createDummyAppService(ctx, log, client, namespace); err != nil {
+		return nil, fmt.Errorf("creating service: %w", err)
+	}
+
+	if err := waitForDummyApp(ctx, log, client, namespace); err != nil {
+		return nil, fmt.Errorf("waiting for dummy app: %w", err)
+	}
 
 	return func() {
 		if skipCleanup {
-			t.Log("Skipping cleanup of dummy app")
+			log.Logf("Skipping cleanup of dummy app")
 			return
 		}
 
-		t.Logf("Deleting dummy app %s", name)
+		log.Logf("Deleting dummy app %s", name)
 		err := client.CoreV1().Services(namespace).Delete(context.Background(), name, metav1.DeleteOptions{})
 		if err != nil {
-			t.Errorf("Deleting service %s: %v", name, err)
+			log.Logf("Deleting service %s: %v", name, err)
 		}
 
 		err = client.AppsV1().Deployments(namespace).Delete(context.Background(), name, metav1.DeleteOptions{})
 		if err != nil {
-			t.Errorf("Deleting deployment %s: %v", name, err)
+			log.Logf("Deleting deployment %s: %v", name, err)
 		}
-	}
+	}, nil
 }
 
-func createDummyAppDeployment(ctx context.Context, t *testing.T, client *kubernetes.Clientset, namespace string) {
+func createDummyAppDeployment(ctx context.Context, log Logger, client *kubernetes.Clientset, namespace string) error {
 	labels := map[string]string{"app": name}
 
-	t.Logf("Creating dummy app %s", name)
+	log.Logf("Creating dummy app %s", name)
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -78,11 +84,14 @@ func createDummyAppDeployment(ctx context.Context, t *testing.T, client *kuberne
 		},
 	}
 
-	_, err := client.AppsV1().Deployments(namespace).Create(ctx, deployment, metav1.CreateOptions{})
-	require.NoError(t, err)
+	if _, err := client.AppsV1().Deployments(namespace).Create(ctx, deployment, metav1.CreateOptions{}); err != nil {
+		return fmt.Errorf("creating deployment: %w", err)
+	}
+
+	return nil
 }
 
-func createDummyAppService(ctx context.Context, t *testing.T, client *kubernetes.Clientset, namespace string) {
+func createDummyAppService(ctx context.Context, log Logger, client *kubernetes.Clientset, namespace string) error {
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -100,12 +109,15 @@ func createDummyAppService(ctx context.Context, t *testing.T, client *kubernetes
 		},
 	}
 
-	_, err := client.CoreV1().Services(namespace).Create(ctx, service, metav1.CreateOptions{})
-	require.NoError(t, err)
+	if _, err := client.CoreV1().Services(namespace).Create(ctx, service, metav1.CreateOptions{}); err != nil {
+		return fmt.Errorf("creating service: %w", err)
+	}
+
+	return nil
 }
 
-func waitForDummyApp(ctx context.Context, t *testing.T, client *kubernetes.Clientset, namespace string) {
-	t.Log("Waiting for dummy app to be ready")
+func waitForDummyApp(ctx context.Context, log Logger, client *kubernetes.Clientset, namespace string) error {
+	log.Logf("Waiting for dummy app to be ready")
 	err := wait.PollUntilContextTimeout(ctx, 1*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
 		dep, err := client.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
@@ -118,5 +130,9 @@ func waitForDummyApp(ctx context.Context, t *testing.T, client *kubernetes.Clien
 		}
 		return false, nil
 	})
-	require.NoError(t, err)
+	if err != nil {
+		return fmt.Errorf("waiting for deployment: %w", err)
+	}
+
+	return nil
 }
