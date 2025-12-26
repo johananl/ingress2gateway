@@ -175,22 +175,19 @@ func findEgressNIC(ip string) (*net.UDPAddr, error) {
 	return conn.LocalAddr().(*net.UDPAddr), nil
 }
 
-// Accepts a CIDR, carves out a range to be used by MetalLB and returns that range as a start IP
-// and end IP.
+// Accepts a CIDR, carves out a range of 50 addresses to be used by MetalLB and returns the range's
+// start and end addresses as strings.
 func getIPRange(cidr string) (string, string, error) {
-	// Compute the network address (first address in CIDR).
 	_, ipnet, err := net.ParseCIDR(cidr)
 	if err != nil {
 		return "", "", fmt.Errorf("invalid CIDR: %s", cidr)
 	}
 
-	// Convert network address to an IP we can do bitwise operations on.
 	ip4 := ipnet.IP.To4()
 	if ip4 == nil {
 		return "", "", fmt.Errorf("IPv6 support not implemented")
 	}
 
-	// Compute the subnet mask.
 	ones, bits := ipnet.Mask.Size()
 	if bits != 32 {
 		return "", "", fmt.Errorf("IPv6 support not implemented")
@@ -201,24 +198,19 @@ func getIPRange(cidr string) (string, string, error) {
 		return "", "", fmt.Errorf("subnet too small for MetalLB range")
 	}
 
-	// Compute the broadcast address (last address in CIDR).
 	broadcast := net.IP(make([]byte, 4))
 	for i := range ip4 {
 		broadcast[i] = ip4[i] | ^ipnet.Mask[i]
 	}
 
-	// Convert broadcast address to an integer.
 	broadcastVal := binary.BigEndian.Uint32(broadcast)
 
-	// Define range.
 	endVal := broadcastVal - 5
 	startVal := endVal - 50
 
-	// Construct start IP.
 	startIP := make(net.IP, 4)
 	binary.BigEndian.PutUint32(startIP, startVal)
 
-	// Construct end IP.
 	endIP := make(net.IP, 4)
 	binary.BigEndian.PutUint32(endIP, endVal)
 
