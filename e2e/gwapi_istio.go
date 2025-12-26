@@ -75,10 +75,10 @@ func deployGatewayAPIIstio(ctx context.Context,
 			return
 		}
 		log.Logf("Cleaning up Istio")
-		if err := uninstallChart(ctx, log, settings, "istiod", namespace); err != nil {
+		if err := uninstallChart(context.Background(), log, settings, "istiod", namespace); err != nil {
 			log.Logf("Uninstalling chart %s: %v", "istiod", err)
 		}
-		if err := uninstallChart(ctx, log, settings, "istio-base", namespace); err != nil {
+		if err := uninstallChart(context.Background(), log, settings, "istio-base", namespace); err != nil {
 			log.Logf("Uninstalling chart %s: %v", "istio-base", err)
 		}
 

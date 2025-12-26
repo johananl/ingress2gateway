@@ -77,11 +77,11 @@ func deployMetalLB(
 			return
 		}
 		log.Logf("Cleaning up MetalLB")
-		if err := uninstallChart(ctx, log, settings, "metallb", metalLBNamespace); err != nil {
+		if err := uninstallChart(context.Background(), log, settings, "metallb", metalLBNamespace); err != nil {
 			log.Logf("Uninstalling chart: %v", err)
 		}
 
-		if err := deleteNamespaceAndWait(ctx, log, client, metalLBNamespace); err != nil {
+		if err := deleteNamespaceAndWait(context.Background(), log, client, metalLBNamespace); err != nil {
 			log.Logf("Deleting namespace: %v", err)
 		}
 	}, nil

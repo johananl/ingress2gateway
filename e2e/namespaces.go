@@ -36,7 +36,7 @@ func createNamespace(ctx context.Context, log Logger, client *kubernetes.Clients
 			return
 		}
 		log.Logf("Cleaning up namespace %s", ns)
-		if err := deleteNamespaceAndWait(ctx, log, client, ns); err != nil {
+		if err := deleteNamespaceAndWait(context.Background(), log, client, ns); err != nil {
 			log.Logf("Deleting namespace %s: %v", ns, err)
 		}
 	}, nil

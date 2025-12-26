@@ -47,11 +47,11 @@ func deployIngressNginx(
 			return
 		}
 		log.Logf("Cleaning up ingress-nginx")
-		if err := uninstallChart(ctx, log, settings, "ingress-nginx", namespace); err != nil {
+		if err := uninstallChart(context.Background(), log, settings, "ingress-nginx", namespace); err != nil {
 			log.Logf("Uninstalling chart: %v", err)
 		}
 
-		if err := deleteNamespaceAndWait(ctx, log, client, namespace); err != nil {
+		if err := deleteNamespaceAndWait(context.Background(), log, client, namespace); err != nil {
 			log.Logf("Deleting namespace: %v", err)
 		}
 	}, nil

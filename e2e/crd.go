@@ -55,7 +55,7 @@ func deployCRDs(ctx context.Context, log Logger, client *apiextensionsclientset.
 		}
 		for _, crd := range crds {
 			log.Logf("Deleting CRD %s", crd.Name)
-			if err := client.ApiextensionsV1().CustomResourceDefinitions().Delete(ctx, crd.Name, metav1.DeleteOptions{}); err != nil {
+			if err := client.ApiextensionsV1().CustomResourceDefinitions().Delete(context.Background(), crd.Name, metav1.DeleteOptions{}); err != nil {
 				log.Logf("Deleting CRD %s: %v", crd.Name, err)
 			}
 		}
