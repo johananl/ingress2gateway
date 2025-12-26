@@ -57,7 +57,7 @@ func installChart(
 
 	_, err = install.RunWithContext(ctx, chartRequested, values)
 	if err != nil {
-		return fmt.Errorf("installing chart: %w", err)
+		return fmt.Errorf("running install: %w", err)
 	}
 
 	return nil
