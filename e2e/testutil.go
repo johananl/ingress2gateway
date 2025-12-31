@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"net"
 	"os"
 	"testing"
 	"time"
@@ -58,6 +57,9 @@ func runTestCase(t *testing.T, tc *TestCase) {
 	require.NoError(t, err)
 
 	gwClient, err := NewGatewayClientFromKubeconfigPath(kubeconfig)
+	require.NoError(t, err)
+
+	restConfig, err := NewRestConfigFromKubeconfigPath(kubeconfig)
 	require.NoError(t, err)
 
 	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -131,13 +133,42 @@ func runTestCase(t *testing.T, tc *TestCase) {
 	require.NoError(t, err)
 	t.Cleanup(cleanupIngresses)
 
-	// Wait for ingresses to get IP addresses.
-	addresses, err := waitForIngressAddresses(ctx, t, k8sClient, appNS, tc.Ingresses)
-	require.NoError(t, err)
-	t.Logf("Got ingress addresses: %v", addresses)
+	// Set up port-forwarding to the ingress controller for verification.
+	// We need to find the ingress controller service and forward to it.
+	var ingressPortForwarders []*PortForwarder
+	ingressAddresses := make(map[types.NamespacedName]string)
+
+	for _, p := range tc.Providers {
+		switch p {
+		case "ingress-nginx":
+			ingressNS := fmt.Sprintf("%s-ingress-nginx", e2ePrefix)
+			svc, err := FindIngressControllerService(ctx, k8sClient, ingressNS, "ingress-nginx")
+			require.NoError(t, err, "finding ingress-nginx service")
+
+			pf, addr, err := StartPortForwardToService(ctx, k8sClient, restConfig, svc.Namespace, svc.Name, 80)
+			require.NoError(t, err, "starting port-forward to ingress-nginx")
+			ingressPortForwarders = append(ingressPortForwarders, pf)
+
+			// All ingresses handled by this controller share the same address.
+			for _, ing := range tc.Ingresses {
+				nn := types.NamespacedName{Namespace: appNS, Name: ing.Name}
+				ingressAddresses[nn] = addr
+			}
+			t.Logf("Port-forwarding ingress controller %s via %s", p, addr)
+		default:
+			t.Fatalf("Unknown ingress provider: %s", p)
+		}
+	}
+
+	// Register cleanup for ingress port-forwarders (runs before other cleanups due to LIFO).
+	t.Cleanup(func() {
+		for _, pf := range ingressPortForwarders {
+			pf.Stop()
+		}
+	})
 
 	// Run verifiers against ingresses.
-	verifyIngresses(ctx, t, tc, appNS, addresses)
+	verifyIngresses(ctx, t, tc, appNS, ingressAddresses)
 
 	// Call ingress2gateway.
 	// Pass an empty input file to make i2gw read ingresses from the cluster.
@@ -167,27 +198,60 @@ func runTestCase(t *testing.T, tc *TestCase) {
 	}
 	t.Cleanup(cleanupGatewayResources)
 
-	// Wait for gateways to get IP addresses.
-	gwAddresses, err := waitForGatewayAddresses(ctx, t, gwClient, appNS, getGateways(res))
-	if err != nil {
-		t.Fatalf("Waiting for gateway addresses: %v", err)
+	// Set up port-forwarding to each gateway for verification.
+	var gatewayPortForwarders []*PortForwarder
+	gwAddresses := make(map[types.NamespacedName]string)
+
+	for gwName, gw := range getGateways(res) {
+		ns := gw.Namespace
+		if ns == "" {
+			ns = appNS
+		}
+
+		// Find the service created by the Gateway controller.
+		svc, err := FindGatewayService(ctx, t, k8sClient, ns, gw.Name)
+		if err != nil {
+			t.Fatalf("Finding gateway service for %s: %v", gwName, err)
+		}
+
+		// Wait for at least one pod to be ready before port-forwarding.
+		t.Logf("Waiting for gateway %s service %s/%s to have ready pods", gwName, svc.Namespace, svc.Name)
+		if err := WaitForServiceReady(ctx, k8sClient, svc.Namespace, svc.Name); err != nil {
+			t.Fatalf("Waiting for gateway service %s/%s to be ready: %v", svc.Namespace, svc.Name, err)
+		}
+
+		// Start port-forward to the gateway service.
+		pf, addr, err := StartPortForwardToService(ctx, k8sClient, restConfig, svc.Namespace, svc.Name, 80)
+		if err != nil {
+			t.Fatalf("Starting port-forward for gateway %s: %v", gwName, err)
+		}
+
+		gatewayPortForwarders = append(gatewayPortForwarders, pf)
+		gwAddresses[gwName] = addr
+		t.Logf("Port-forwarding gateway %s via %s", gwName, addr)
 	}
-	t.Logf("Got gateway addresses: %v", gwAddresses)
+
+	// Register cleanup for gateway port-forwarders.
+	t.Cleanup(func() {
+		for _, pf := range gatewayPortForwarders {
+			pf.Stop()
+		}
+	})
 
 	// Run verifier against GWAPI implementation.
 	verifyGatewayResources(ctx, t, tc, appNS, gwAddresses)
 }
 
-func verifyIngresses(ctx context.Context, t *testing.T, tc *TestCase, namespace string, addresses map[types.NamespacedName]net.IP) {
+func verifyIngresses(ctx context.Context, t *testing.T, tc *TestCase, namespace string, addresses map[types.NamespacedName]string) {
 	for ingressName, verifiers := range tc.Verifiers {
 		nn := types.NamespacedName{Namespace: namespace, Name: ingressName}
-		ip, ok := addresses[nn]
+		addr, ok := addresses[nn]
 		if !ok {
 			t.Fatalf("Ingress %s not found in addresses", ingressName)
 		}
 
 		for _, v := range verifiers {
-			err := v.Verify(ctx, t, ip)
+			err := v.Verify(ctx, t, addr)
 			if err != nil {
 				t.Fatalf("Ingress verification failed: %v", err)
 			}
@@ -195,7 +259,7 @@ func verifyIngresses(ctx context.Context, t *testing.T, tc *TestCase, namespace 
 	}
 }
 
-func verifyGatewayResources(ctx context.Context, t *testing.T, tc *TestCase, namespace string, gwAddresses map[types.NamespacedName]net.IP) {
+func verifyGatewayResources(ctx context.Context, t *testing.T, tc *TestCase, namespace string, gwAddresses map[types.NamespacedName]string) {
 	for ingressName, verifiers := range tc.Verifiers {
 		// Find the ingress to determine the expected Gateway name.
 		var ingress *networkingv1.Ingress
@@ -215,13 +279,13 @@ func verifyGatewayResources(ctx context.Context, t *testing.T, tc *TestCase, nam
 		}
 
 		gwName := types.NamespacedName{Namespace: namespace, Name: ingressClass}
-		ip, ok := gwAddresses[gwName]
+		addr, ok := gwAddresses[gwName]
 		if !ok {
 			t.Fatalf("Gateway %s not found in addresses", gwName)
 		}
 
 		for _, v := range verifiers {
-			err := v.Verify(ctx, t, ip)
+			err := v.Verify(ctx, t, addr)
 			if err != nil {
 				t.Fatalf("Gateway API verification failed: %v", err)
 			}

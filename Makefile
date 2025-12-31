@@ -94,15 +94,13 @@ e2e: ## Run end-to-end tests.
 		exit 1; \
 	fi
 	@cleanup_kind=false; \
-	deploy_metallb="$${I2GW_DEPLOY_METALLB}"; \
 	kubeconfig="$${I2GW_KUBECONFIG}"; \
 	if [ -z "$${I2GW_KUBECONFIG}" ]; then \
 		$(MAKE) kind || exit 1; \
 		kubeconfig="$(REPO_ROOT)/kind-kubeconfig"; \
 		cleanup_kind=true; \
-		deploy_metallb=1; \
 	fi; \
-	DEPLOY_METALLB=$${deploy_metallb} KUBECONFIG=$${kubeconfig} go test \
+	KUBECONFIG=$${kubeconfig} go test \
 		-race -v -count=1 -timeout=30m -run "$${I2GW_RUN_TESTS}" $(REPO_ROOT)/e2e; \
 	test_exit_code=$$?; \
 	if [ "$${cleanup_kind}" = "true" ] && [ "$${SKIP_CLEANUP}" != "1" ]; then \
