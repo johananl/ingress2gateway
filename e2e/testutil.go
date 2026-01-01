@@ -37,8 +37,6 @@ type TestCase struct {
 	Verifiers             map[string][]Verifier
 }
 
-// TODO: Move CRDs and MetalLB to resource manager and avoid TestMain?
-
 func runTestCase(t *testing.T, tc *TestCase) {
 	t.Parallel()
 
@@ -59,6 +57,9 @@ func runTestCase(t *testing.T, tc *TestCase) {
 	gwClient, err := NewGatewayClientFromKubeconfigPath(kubeconfig)
 	require.NoError(t, err)
 
+	apiextensionsClient, err := NewAPIExtensionsClientFromKubeconfigPath(kubeconfig)
+	require.NoError(t, err)
+
 	restConfig, err := NewRestConfigFromKubeconfigPath(kubeconfig)
 	require.NoError(t, err)
 
@@ -74,6 +75,12 @@ func runTestCase(t *testing.T, tc *TestCase) {
 
 	// Deploy ingress providers and GWAPI implementation asynchronously.
 	var resources []Resource
+
+	// Deploy Gateway API CRDs.
+	crdResource := globalResourceManager.Acquire("gateway-api-crds", func() (CleanupFunc, error) {
+		return deployCRDs(ctx, t, apiextensionsClient, skipCleanup)
+	})
+	resources = append(resources, crdResource)
 
 	for _, p := range tc.Providers {
 		var r Resource
