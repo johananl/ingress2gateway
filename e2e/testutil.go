@@ -292,7 +292,3 @@ func verifyGatewayResources(ctx context.Context, t *testing.T, tc *TestCase, nam
 		}
 	}
 }
-
-type Logger interface {
-	Logf(format string, args ...interface{})
-}
