@@ -67,9 +67,31 @@ build: vet;$(info $(M)...Build the binary.)  @ ## Build the binary.
 verify:
 	hack/verify-all.sh -v
 
+# Detect OS and architecture for Kind installation
+OS := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+ARCH := $(shell uname -m)
+ifeq ($(ARCH),x86_64)
+	ARCH := amd64
+endif
+ifeq ($(ARCH),aarch64)
+	ARCH := arm64
+endif
+
+KIND_VERSION ?= v0.25.0
+KIND_BINARY_URL := https://kind.sigs.k8s.io/dl/$(KIND_VERSION)/kind-$(OS)-$(ARCH)
+
 .PHONY: ensure-kind
 ensure-kind:
-	echo "TODO: Ensure kind"
+	@if ! command -v kind >/dev/null 2>&1; then \
+		echo "kind binary not found. Installing kind $(KIND_VERSION) for $(OS)/$(ARCH)..."; \
+		curl -Lo ./kind $(KIND_BINARY_URL); \
+		chmod +x ./kind; \
+		echo "Moving kind to /usr/local/bin (sudo password may be required)..."; \
+		sudo mv ./kind /usr/local/bin/kind; \
+		echo "Kind installed successfully."; \
+	else \
+		echo "Kind is already installed: $$(kind version)"; \
+	fi
 
 .PHONY: kind
 kind: ensure-kind
