@@ -28,49 +28,58 @@ type ResourceManager struct {
 // Each caller MUST call the Cleanup() method on the returned Resource to ensure resource release
 // takes place.
 func (rm *ResourceManager) Acquire(key string, install InstallFunc) Resource {
-	rm.mu.Lock()
-	defer rm.mu.Unlock()
-
-	state, exists := rm.resources[key]
-	if !exists {
-		state = &resourceState{
-			ready: make(chan struct{}),
-			count: 0,
+	for {
+		rm.mu.Lock()
+		state, exists := rm.resources[key]
+		if exists && state.cleaningUp != nil {
+			// Resource is being cleaned up - wait and retry.
+			cleaningUp := state.cleaningUp
+			rm.mu.Unlock()
+			<-cleaningUp
+			continue
 		}
-		rm.resources[key] = state
 
-		// Run installation asynchronously.
-		go func() {
-			defer close(state.ready)
-			cleanup, err := install()
-			if err != nil {
-				state.err = err
-				return
+		if !exists {
+			state = &resourceState{
+				ready: make(chan struct{}),
+				count: 0,
 			}
-			state.cleanup = cleanup
-		}()
-	}
-	state.count++
+			rm.resources[key] = state
 
-	var once sync.Once // Protect against multiple cleanups by same caller
-	var done <-chan struct{}
+			// Run installation asynchronously.
+			go func() {
+				defer close(state.ready)
+				cleanup, err := install()
+				if err != nil {
+					state.err = err
+					return
+				}
+				state.cleanup = cleanup
+			}()
+		}
+		state.count++
+		rm.mu.Unlock()
 
-	return Resource{
-		Cleanup: func() <-chan struct{} {
-			once.Do(func() {
-				done = rm.release(key)
-			})
-			return done
-		},
-		Wait: func() error {
-			<-state.ready
-			return state.err
-		},
+		var once sync.Once // Protect against multiple cleanups by same caller
+		var done <-chan struct{}
+
+		return Resource{
+			Cleanup: func() <-chan struct{} {
+				once.Do(func() {
+					done = rm.release(key)
+				})
+				return done
+			},
+			Wait: func() error {
+				<-state.ready
+				return state.err
+			},
+		}
 	}
 }
 
-// Decrements the reference count for a resource and triggers cleanup when the count
-// reaches zero. It returns a channel that is closed when cleanup completes.
+// Decrements the reference count for a resource and triggers cleanup when the count reaches zero.
+// Returns a channel that is closed when cleanup completes.
 func (rm *ResourceManager) release(key string) <-chan struct{} {
 	done := make(chan struct{})
 
@@ -86,14 +95,22 @@ func (rm *ResourceManager) release(key string) <-chan struct{} {
 
 		state.count--
 		if state.count <= 0 {
-			delete(rm.resources, key)
+			// Mark the resource as cleaning up before releasing the lock. This prevents new
+			// Acquire calls from using a resource that is being cleaned up.
+			state.cleaningUp = make(chan struct{})
 			rm.mu.Unlock()
-			// Wait for installation to complete before cleanup, then run cleanup outside the lock.
-			// TODO: Potential race. Another caller could try to acquire here.
+
+			// Wait for installation to complete before running cleanup.
 			<-state.ready
 			if state.cleanup != nil {
 				state.cleanup()
 			}
+
+			// Remove the resource from the map and signal cleanup is done.
+			rm.mu.Lock()
+			delete(rm.resources, key)
+			close(state.cleaningUp)
+			rm.mu.Unlock()
 		} else {
 			rm.mu.Unlock()
 		}
@@ -120,8 +137,9 @@ type CleanupFunc func()
 
 // Tracks a shared resource's state.
 type resourceState struct {
-	cleanup CleanupFunc
-	ready   chan struct{} // Closed when installation completes
-	err     error         // An installation error
-	count   int           // Reference count
+	cleanup    CleanupFunc
+	ready      chan struct{} // Closed when installation completes
+	cleaningUp chan struct{} // Closed when cleanup completes
+	err        error         // An installation error
+	count      int           // Reference count
 }
