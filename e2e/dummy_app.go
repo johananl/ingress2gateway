@@ -34,13 +34,16 @@ func createDummyApp(ctx context.Context, log Logger, client *kubernetes.Clientse
 			return
 		}
 
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
 		log.Logf("Deleting dummy app %s", name)
-		err := client.CoreV1().Services(namespace).Delete(context.Background(), name, metav1.DeleteOptions{})
+		err := client.CoreV1().Services(namespace).Delete(cleanupCtx, name, metav1.DeleteOptions{})
 		if err != nil {
 			log.Logf("Deleting service %s: %v", name, err)
 		}
 
-		err = client.AppsV1().Deployments(namespace).Delete(context.Background(), name, metav1.DeleteOptions{})
+		err = client.AppsV1().Deployments(namespace).Delete(cleanupCtx, name, metav1.DeleteOptions{})
 		if err != nil {
 			log.Logf("Deleting deployment %s: %v", name, err)
 		}

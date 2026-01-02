@@ -33,9 +33,13 @@ func createIngresses(ctx context.Context, log Logger, client *kubernetes.Clients
 			log.Logf("Skipping cleanup of ingresses")
 			return
 		}
+
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
 		for _, ingress := range ingresses {
 			log.Logf("Deleting ingress %s", ingress.Name)
-			err := client.NetworkingV1().Ingresses(ns).Delete(context.Background(), ingress.Name, metav1.DeleteOptions{})
+			err := client.NetworkingV1().Ingresses(ns).Delete(cleanupCtx, ingress.Name, metav1.DeleteOptions{})
 			if err != nil {
 				log.Logf("Deleting ingress %s: %v", ingress.Name, err)
 			}

@@ -114,13 +114,17 @@ func createGateways(ctx context.Context, log Logger, client *gwclientset.Clients
 		if skipCleanup {
 			return
 		}
+
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
 		for _, gw := range gws {
 			namespace := gw.Namespace
 			if namespace == "" {
 				namespace = ns
 			}
 			log.Logf("Deleting Gateway %s/%s", namespace, gw.Name)
-			err := client.GatewayV1().Gateways(namespace).Delete(context.Background(), gw.Name, metav1.DeleteOptions{})
+			err := client.GatewayV1().Gateways(namespace).Delete(cleanupCtx, gw.Name, metav1.DeleteOptions{})
 			if err != nil {
 				log.Logf("Deleting Gateway %s: %v", gw.Name, err)
 			}
@@ -151,9 +155,13 @@ func createGatewayClasses(ctx context.Context, log Logger, client *gwclientset.C
 		if skipCleanup {
 			return
 		}
+
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
 		for _, gc := range gcs {
 			log.Logf("Deleting GatewayClass %s", gc.Name)
-			err := client.GatewayV1().GatewayClasses().Delete(context.Background(), gc.Name, metav1.DeleteOptions{})
+			err := client.GatewayV1().GatewayClasses().Delete(cleanupCtx, gc.Name, metav1.DeleteOptions{})
 			if err != nil {
 				log.Logf("Deleting GatewayClass %s: %v", gc.Name, err)
 			}
@@ -189,13 +197,17 @@ func createHTTPRoutes(ctx context.Context, log Logger, client *gwclientset.Clien
 		if skipCleanup {
 			return
 		}
+
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
 		for _, route := range routes {
 			namespace := route.Namespace
 			if namespace == "" {
 				namespace = ns
 			}
 			log.Logf("Deleting HTTPRoute %s/%s", namespace, route.Name)
-			err := client.GatewayV1().HTTPRoutes(namespace).Delete(context.Background(), route.Name, metav1.DeleteOptions{})
+			err := client.GatewayV1().HTTPRoutes(namespace).Delete(cleanupCtx, route.Name, metav1.DeleteOptions{})
 			if err != nil {
 				log.Logf("Deleting HTTPRoute %s: %v", route.Name, err)
 			}
@@ -231,13 +243,17 @@ func createGRPCRoutes(ctx context.Context, log Logger, client *gwclientset.Clien
 		if skipCleanup {
 			return
 		}
+
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
 		for _, route := range routes {
 			namespace := route.Namespace
 			if namespace == "" {
 				namespace = ns
 			}
 			log.Logf("Deleting GRPCRoute %s/%s", namespace, route.Name)
-			err := client.GatewayV1().GRPCRoutes(namespace).Delete(context.Background(), route.Name, metav1.DeleteOptions{})
+			err := client.GatewayV1().GRPCRoutes(namespace).Delete(cleanupCtx, route.Name, metav1.DeleteOptions{})
 			if err != nil {
 				log.Logf("Deleting GRPCRoute %s: %v", route.Name, err)
 			}
@@ -273,13 +289,17 @@ func createTLSRoutes(ctx context.Context, log Logger, client *gwclientset.Client
 		if skipCleanup {
 			return
 		}
+
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
 		for _, route := range routes {
 			namespace := route.Namespace
 			if namespace == "" {
 				namespace = ns
 			}
 			log.Logf("Deleting TLSRoute %s/%s", namespace, route.Name)
-			err := client.GatewayV1alpha2().TLSRoutes(namespace).Delete(context.Background(), route.Name, metav1.DeleteOptions{})
+			err := client.GatewayV1alpha2().TLSRoutes(namespace).Delete(cleanupCtx, route.Name, metav1.DeleteOptions{})
 			if err != nil {
 				log.Logf("Deleting TLSRoute %s: %v", route.Name, err)
 			}
@@ -315,13 +335,17 @@ func createTCPRoutes(ctx context.Context, log Logger, client *gwclientset.Client
 		if skipCleanup {
 			return
 		}
+
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
 		for _, route := range routes {
 			namespace := route.Namespace
 			if namespace == "" {
 				namespace = ns
 			}
 			log.Logf("Deleting TCPRoute %s/%s", namespace, route.Name)
-			err := client.GatewayV1alpha2().TCPRoutes(namespace).Delete(context.Background(), route.Name, metav1.DeleteOptions{})
+			err := client.GatewayV1alpha2().TCPRoutes(namespace).Delete(cleanupCtx, route.Name, metav1.DeleteOptions{})
 			if err != nil {
 				log.Logf("Deleting TCPRoute %s: %v", route.Name, err)
 			}
@@ -357,13 +381,17 @@ func createUDPRoutes(ctx context.Context, log Logger, client *gwclientset.Client
 		if skipCleanup {
 			return
 		}
+
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
 		for _, route := range routes {
 			namespace := route.Namespace
 			if namespace == "" {
 				namespace = ns
 			}
 			log.Logf("Deleting UDPRoute %s/%s", namespace, route.Name)
-			err := client.GatewayV1alpha2().UDPRoutes(namespace).Delete(context.Background(), route.Name, metav1.DeleteOptions{})
+			err := client.GatewayV1alpha2().UDPRoutes(namespace).Delete(cleanupCtx, route.Name, metav1.DeleteOptions{})
 			if err != nil {
 				log.Logf("Deleting UDPRoute %s: %v", route.Name, err)
 			}
@@ -399,13 +427,17 @@ func createBackendTLSPolicies(ctx context.Context, log Logger, client *gwclients
 		if skipCleanup {
 			return
 		}
+
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
 		for _, policy := range policies {
 			namespace := policy.Namespace
 			if namespace == "" {
 				namespace = ns
 			}
 			log.Logf("Deleting BackendTLSPolicy %s/%s", namespace, policy.Name)
-			err := client.GatewayV1().BackendTLSPolicies(namespace).Delete(context.Background(), policy.Name, metav1.DeleteOptions{})
+			err := client.GatewayV1().BackendTLSPolicies(namespace).Delete(cleanupCtx, policy.Name, metav1.DeleteOptions{})
 			if err != nil {
 				log.Logf("Deleting BackendTLSPolicy %s: %v", policy.Name, err)
 			}
@@ -441,13 +473,17 @@ func createReferenceGrants(ctx context.Context, log Logger, client *gwclientset.
 		if skipCleanup {
 			return
 		}
+
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
 		for _, grant := range grants {
 			namespace := grant.Namespace
 			if namespace == "" {
 				namespace = ns
 			}
 			log.Logf("Deleting ReferenceGrant %s/%s", namespace, grant.Name)
-			err := client.GatewayV1beta1().ReferenceGrants(namespace).Delete(context.Background(), grant.Name, metav1.DeleteOptions{})
+			err := client.GatewayV1beta1().ReferenceGrants(namespace).Delete(cleanupCtx, grant.Name, metav1.DeleteOptions{})
 			if err != nil {
 				log.Logf("Deleting ReferenceGrant %s: %v", grant.Name, err)
 			}

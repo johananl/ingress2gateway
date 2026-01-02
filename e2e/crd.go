@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -53,9 +54,13 @@ func deployCRDs(ctx context.Context, log Logger, client *apiextensionsclientset.
 			log.Logf("Skipping cleanup of CRDs")
 			return
 		}
+
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+
 		for _, crd := range crds {
 			log.Logf("Deleting CRD %s", crd.Name)
-			if err := client.ApiextensionsV1().CustomResourceDefinitions().Delete(context.Background(), crd.Name, metav1.DeleteOptions{}); err != nil {
+			if err := client.ApiextensionsV1().CustomResourceDefinitions().Delete(cleanupCtx, crd.Name, metav1.DeleteOptions{}); err != nil {
 				log.Logf("Deleting CRD %s: %v", crd.Name, err)
 			}
 		}

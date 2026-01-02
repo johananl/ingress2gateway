@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"helm.sh/helm/v4/pkg/cli"
 	"k8s.io/client-go/kubernetes"
@@ -46,12 +47,16 @@ func deployIngressNginx(
 			log.Logf("Skipping cleanup of ingress-nginx")
 			return
 		}
+
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
 		log.Logf("Cleaning up ingress-nginx")
-		if err := uninstallChart(context.Background(), log, settings, "ingress-nginx", namespace); err != nil {
+		if err := uninstallChart(cleanupCtx, log, settings, "ingress-nginx", namespace); err != nil {
 			log.Logf("Uninstalling chart: %v", err)
 		}
 
-		if err := deleteNamespaceAndWait(context.Background(), log, client, namespace); err != nil {
+		if err := deleteNamespaceAndWait(cleanupCtx, log, client, namespace); err != nil {
 			log.Logf("Deleting namespace: %v", err)
 		}
 	}, nil

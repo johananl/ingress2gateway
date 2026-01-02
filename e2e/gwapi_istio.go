@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"helm.sh/helm/v4/pkg/cli"
 	"k8s.io/client-go/kubernetes"
@@ -74,15 +75,19 @@ func deployGatewayAPIIstio(ctx context.Context,
 			log.Logf("Skipping cleanup of Istio")
 			return
 		}
+
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
 		log.Logf("Cleaning up Istio")
-		if err := uninstallChart(context.Background(), log, settings, "istiod", namespace); err != nil {
+		if err := uninstallChart(cleanupCtx, log, settings, "istiod", namespace); err != nil {
 			log.Logf("Uninstalling chart %s: %v", "istiod", err)
 		}
-		if err := uninstallChart(context.Background(), log, settings, "istio-base", namespace); err != nil {
+		if err := uninstallChart(cleanupCtx, log, settings, "istio-base", namespace); err != nil {
 			log.Logf("Uninstalling chart %s: %v", "istio-base", err)
 		}
 
-		if err := deleteNamespaceAndWait(context.Background(), log, client, namespace); err != nil {
+		if err := deleteNamespaceAndWait(cleanupCtx, log, client, namespace); err != nil {
 			log.Logf("Deleting namespace: %v", err)
 		}
 	}, nil
