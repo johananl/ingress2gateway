@@ -31,7 +31,7 @@ import (
 )
 
 // PathRegexFeature converts nginx.org/path-regex annotation to regex path matching
-func PathRegexFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedName]map[string]int32, ir *providerir.ProviderIR) field.ErrorList {
+func PathRegexFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedName]map[string]int32, ir *providerir.ProviderIR, notifier *notifications.Notifier) field.ErrorList {
 	var errs field.ErrorList
 
 	// Valid values for path-regex annotation
@@ -64,12 +64,12 @@ func PathRegexFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedNa
 
 				// Add a general warning about NGF not supporting regex
 				message := "nginx.org/path-regex: PathMatchRegularExpression is not supported by NGINX Gateway Fabric - only Exact and PathPrefix are supported"
-				notify(notifications.WarningNotification, message, &rule.Ingress)
+				notifier.Notify(notifications.WarningNotification, message, &rule.Ingress)
 
 				// Add a warning for case_insensitive since Gateway API doesn't guarantee it
 				if pathRegex == "case_insensitive" {
 					message := "nginx.org/path-regex: case_insensitive - injected (?i) regex flag but case insensitive behavior depends on Gateway implementation support"
-					notify(notifications.WarningNotification, message, &rule.Ingress)
+					notifier.Notify(notifications.WarningNotification, message, &rule.Ingress)
 				}
 			}
 

@@ -51,14 +51,20 @@ var (
 	}
 )
 
+const emitterName = "gce"
+
 func init() {
-	i2gw.EmitterConstructorByName["gce"] = NewEmitter
+	i2gw.EmitterConstructorByName[emitterName] = NewEmitter
 }
 
-type Emitter struct{}
+type Emitter struct {
+	notifier *notifications.Notifier
+}
 
-func NewEmitter(_ *i2gw.EmitterConf) i2gw.Emitter {
-	return &Emitter{}
+func NewEmitter(conf *i2gw.EmitterConf) i2gw.Emitter {
+	return &Emitter{
+		notifier: notifications.NewNotifier(conf.NotificationAgg, emitterName),
+	}
 }
 
 func (c *Emitter) Emit(ir emitterir.EmitterIR) (i2gw.GatewayResources, field.ErrorList) {
@@ -66,12 +72,12 @@ func (c *Emitter) Emit(ir emitterir.EmitterIR) (i2gw.GatewayResources, field.Err
 	if len(errs) != 0 {
 		return i2gw.GatewayResources{}, errs
 	}
-	buildGceGatewayExtensions(ir, &gatewayResources)
-	buildGceServiceExtensions(ir, &gatewayResources)
+	c.buildGceGatewayExtensions(ir, &gatewayResources)
+	c.buildGceServiceExtensions(ir, &gatewayResources)
 	return gatewayResources, nil
 }
 
-func buildGceGatewayExtensions(ir emitterir.EmitterIR, gatewayResources *i2gw.GatewayResources) {
+func (c *Emitter) buildGceGatewayExtensions(ir emitterir.EmitterIR, gatewayResources *i2gw.GatewayResources) {
 	for gwyKey, gatewayContext := range ir.Gateways {
 		gwyPolicy := addGatewayPolicyIfConfigured(gwyKey, &gatewayContext)
 		if gwyPolicy == nil {
@@ -79,7 +85,7 @@ func buildGceGatewayExtensions(ir emitterir.EmitterIR, gatewayResources *i2gw.Ga
 		}
 		obj, err := i2gw.CastToUnstructured(gwyPolicy)
 		if err != nil {
-			notify(notifications.ErrorNotification, "Failed to cast GCPGatewayPolicy to unstructured", gwyPolicy)
+			c.notifier.Notify(notifications.ErrorNotification, "Failed to cast GCPGatewayPolicy to unstructured", gwyPolicy)
 			continue
 		}
 		gatewayResources.GatewayExtensions = append(gatewayResources.GatewayExtensions, *obj)
@@ -115,13 +121,13 @@ func addGatewayPolicyIfConfigured(gatewayNamespacedName types.NamespacedName, ga
 	return &gcpGatewayPolicy
 }
 
-func buildGceServiceExtensions(ir emitterir.EmitterIR, gatewayResources *i2gw.GatewayResources) {
+func (c *Emitter) buildGceServiceExtensions(ir emitterir.EmitterIR, gatewayResources *i2gw.GatewayResources) {
 	for svcKey, gceServiceIR := range ir.GceServices {
 		bePolicy := addGCPBackendPolicyIfConfigured(svcKey, gceServiceIR)
 		if bePolicy != nil {
 			obj, err := i2gw.CastToUnstructured(bePolicy)
 			if err != nil {
-				notify(notifications.ErrorNotification, "Failed to cast GCPBackendPolicy to unstructured", bePolicy)
+				c.notifier.Notify(notifications.ErrorNotification, "Failed to cast GCPBackendPolicy to unstructured", bePolicy)
 				continue
 			}
 			gatewayResources.GatewayExtensions = append(gatewayResources.GatewayExtensions, *obj)
@@ -131,7 +137,7 @@ func buildGceServiceExtensions(ir emitterir.EmitterIR, gatewayResources *i2gw.Ga
 		if hcPolicy != nil {
 			obj, err := i2gw.CastToUnstructured(hcPolicy)
 			if err != nil {
-				notify(notifications.ErrorNotification, "Failed to cast HealthCheckPolicy to unstructured", hcPolicy)
+				c.notifier.Notify(notifications.ErrorNotification, "Failed to cast HealthCheckPolicy to unstructured", hcPolicy)
 				continue
 			}
 			gatewayResources.GatewayExtensions = append(gatewayResources.GatewayExtensions, *obj)

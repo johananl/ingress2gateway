@@ -27,7 +27,7 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
-func headerModifierFeature(_ []networkingv1.Ingress, _ map[types.NamespacedName]map[string]int32, ir *providerir.ProviderIR) field.ErrorList {
+func headerModifierFeature(_ []networkingv1.Ingress, _ map[types.NamespacedName]map[string]int32, ir *providerir.ProviderIR, notifier *notifications.Notifier) field.ErrorList {
 	for _, httpRouteContext := range ir.HTTPRoutes {
 		for i := range httpRouteContext.HTTPRoute.Spec.Rules {
 			if i >= len(httpRouteContext.RuleBackendSources) {
@@ -37,7 +37,7 @@ func headerModifierFeature(_ []networkingv1.Ingress, _ map[types.NamespacedName]
 
 			ingress := getNonCanaryIngress(sources)
 			if ingress == nil {
-				notify(notifications.InfoNotification, "Found canary ingress rule without non-canary ingress rule", &httpRouteContext.HTTPRoute)
+				notifier.Notify(notifications.InfoNotification, "Found canary ingress rule without non-canary ingress rule", &httpRouteContext.HTTPRoute)
 				continue
 			}
 
@@ -66,18 +66,18 @@ func headerModifierFeature(_ []networkingv1.Ingress, _ map[types.NamespacedName]
 			// 4. custom-headers -> Warn unsupported
 			// TODO: implement custom-headers annotation.
 			if _, ok := ingress.Annotations[CustomHeadersAnnotation]; ok {
-				notify(notifications.WarningNotification, fmt.Sprintf("Ingress %s/%s uses '%s' which is not supported.", ingress.Namespace, ingress.Name, CustomHeadersAnnotation), &httpRouteContext.HTTPRoute)
+				notifier.Notify(notifications.WarningNotification, fmt.Sprintf("Ingress %s/%s uses '%s' which is not supported.", ingress.Namespace, ingress.Name, CustomHeadersAnnotation), &httpRouteContext.HTTPRoute)
 			}
 
 			if len(headersToSet) > 0 {
-				applyHeaderModifiers(&httpRouteContext.HTTPRoute, i, headersToSet)
+				applyHeaderModifiers(&httpRouteContext.HTTPRoute, i, headersToSet, notifier)
 			}
 		}
 	}
 	return nil
 }
 
-func applyHeaderModifiers(httpRoute *gatewayv1.HTTPRoute, ruleIndex int, headersToSet map[string]string) {
+func applyHeaderModifiers(httpRoute *gatewayv1.HTTPRoute, ruleIndex int, headersToSet map[string]string, notifier *notifications.Notifier) {
 	// Find existing RequestHeaderModifier filter or create new one
 	var filter *gatewayv1.HTTPRouteFilter
 	for j, f := range httpRoute.Spec.Rules[ruleIndex].Filters {
@@ -104,6 +104,6 @@ func applyHeaderModifiers(httpRoute *gatewayv1.HTTPRoute, ruleIndex int, headers
 			Name:  gatewayv1.HTTPHeaderName(name),
 			Value: value,
 		})
-		notify(notifications.InfoNotification, fmt.Sprintf("Applied header modifier %s: %s to rule %d of route %s/%s", name, value, ruleIndex, httpRoute.Namespace, httpRoute.Name), httpRoute)
+		notifier.Notify(notifications.InfoNotification, fmt.Sprintf("Applied header modifier %s: %s to rule %d of route %s/%s", name, value, ruleIndex, httpRoute.Namespace, httpRoute.Name), httpRoute)
 	}
 }

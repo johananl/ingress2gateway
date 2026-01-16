@@ -29,7 +29,7 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
-func httpToHTTPSFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedName]map[string]int32, ir *providerir.ProviderIR) field.ErrorList {
+func httpToHTTPSFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedName]map[string]int32, ir *providerir.ProviderIR, notifier *notifications.Notifier) field.ErrorList {
 	var errs field.ErrorList
 	httpToHTTPSAnnotation := apisixAnnotation("http-to-https")
 	ruleGroups := common.GetRuleGroups(ingresses)
@@ -56,7 +56,7 @@ func httpToHTTPSFeature(ingresses []networkingv1.Ingress, _ map[types.Namespaced
 					httpRoute.Spec.Rules[i] = rule
 				}
 				if annotationFound && ok {
-					notify(notifications.InfoNotification, fmt.Sprintf("parsed \"%v\" annotation of ingress and patched %v fields", httpToHTTPSAnnotation, field.NewPath("httproute", "spec", "rules").Key("").Child("filters")), &httpRoute)
+					notifier.Notify(notifications.InfoNotification, fmt.Sprintf("parsed \"%v\" annotation of ingress and patched %v fields", httpToHTTPSAnnotation, field.NewPath("httproute", "spec", "rules").Key("").Child("filters")), &httpRoute)
 				}
 			}
 		}

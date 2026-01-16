@@ -25,11 +25,11 @@ import (
 	providerir "github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/provider_intermediate"
 )
 
-func WebSocketServicesFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedName]map[string]int32, _ *providerir.ProviderIR) field.ErrorList {
+func WebSocketServicesFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedName]map[string]int32, _ *providerir.ProviderIR, notifier *notifications.Notifier) field.ErrorList {
 	for _, ingress := range ingresses {
 		if webSocketServices, exists := ingress.Annotations[nginxWebSocketServicesAnnotation]; exists && webSocketServices != "" {
 			message := "nginx.org/websocket-services: Please make sure the services are configured to support WebSocket connections. This annotation does not create any Gateway API resources."
-			notify(notifications.InfoNotification, message, &ingress)
+			notifier.Notify(notifications.InfoNotification, message, &ingress)
 		}
 	}
 

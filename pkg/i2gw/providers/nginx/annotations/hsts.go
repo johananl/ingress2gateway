@@ -32,14 +32,14 @@ import (
 
 // HSTSFeature converts HSTS annotations to HTTPRoute ResponseHeaderModifier filters.
 // Supports nginx.org/hsts, nginx.org/hsts-max-age, and nginx.org/hsts-include-subdomains annotations.
-func HSTSFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedName]map[string]int32, ir *providerir.ProviderIR) field.ErrorList {
+func HSTSFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedName]map[string]int32, ir *providerir.ProviderIR, notifier *notifications.Notifier) field.ErrorList {
 	var errs field.ErrorList
 
 	ruleGroups := common.GetRuleGroups(ingresses)
 	for _, rg := range ruleGroups {
 		for _, rule := range rg.Rules {
 			if hsts, ok := rule.Ingress.Annotations[nginxHSTSAnnotation]; ok && hsts == "true" {
-				errs = append(errs, processHSTSAnnotation(rule.Ingress, ir)...)
+				errs = append(errs, processHSTSAnnotation(rule.Ingress, ir, notifier)...)
 			}
 		}
 	}
@@ -48,7 +48,7 @@ func HSTSFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedName]ma
 }
 
 //nolint:unparam // ErrorList return type maintained for consistency
-func processHSTSAnnotation(ingress networkingv1.Ingress, ir *providerir.ProviderIR) field.ErrorList {
+func processHSTSAnnotation(ingress networkingv1.Ingress, ir *providerir.ProviderIR, notifier *notifications.Notifier) field.ErrorList {
 	var errs field.ErrorList
 
 	hstsHeader := "Strict-Transport-Security"
@@ -58,7 +58,7 @@ func processHSTSAnnotation(ingress networkingv1.Ingress, ir *providerir.Provider
 	// Parse the HSTS max-age value
 	if maxAge, ok := ingress.Annotations[nginxHSTSMaxAgeAnnotation]; ok && maxAge != "" {
 		if _, err := strconv.Atoi(maxAge); err != nil {
-			notify(notifications.ErrorNotification, "nginx.org/hsts-max-age: Invalid max-age value, must be a number", &ingress)
+			notifier.Notify(notifications.ErrorNotification, "nginx.org/hsts-max-age: Invalid max-age value, must be a number", &ingress)
 			// Continue with default value instead of failing
 		} else {
 			hstsMaxAge = maxAge

@@ -277,7 +277,7 @@ func TestHeaderModifierFeature(t *testing.T) {
 				},
 			}
 
-			errs := headerModifierFeature([]networkingv1.Ingress{tc.ingress}, nil, &ir)
+			errs := headerModifierFeature([]networkingv1.Ingress{tc.ingress}, nil, &ir, nil)
 			if len(errs) > 0 {
 				t.Fatalf("Expected no errors, got %v", errs)
 			}

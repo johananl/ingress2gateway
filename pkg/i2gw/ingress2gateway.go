@@ -40,6 +40,9 @@ var Version = "dev" // Default value if not built with linker flags
 func ToGatewayAPIResources(ctx context.Context, namespace string, inputFile string, providers []string, emitterName string, providerSpecificFlags map[string]map[string]string) ([]GatewayResources, map[string]string, error) {
 	var clusterClient client.Client
 
+	// Create a fresh NotificationAggregator for this conversion
+	notificationAggr := notifications.NewNotificationAggregator()
+
 	if inputFile == "" {
 		conf, err := config.GetConfig()
 		if err != nil {
@@ -57,6 +60,7 @@ func ToGatewayAPIResources(ctx context.Context, namespace string, inputFile stri
 		Client:                clusterClient,
 		Namespace:             namespace,
 		ProviderSpecificFlags: providerSpecificFlags,
+		NotificationAgg:       notificationAggr,
 	}, providers)
 	if err != nil {
 		return nil, nil, err
@@ -72,7 +76,7 @@ func ToGatewayAPIResources(ctx context.Context, namespace string, inputFile stri
 		}
 	}
 
-	emitterConf := &EmitterConf{}
+	emitterConf := &EmitterConf{NotificationAgg: notificationAggr}
 	newEmitterFunc, ok := EmitterConstructorByName[EmitterName(emitterName)]
 	if !ok {
 		return nil, nil, fmt.Errorf("%s is not a supported emitter", emitterName)
@@ -95,7 +99,7 @@ func ToGatewayAPIResources(ctx context.Context, namespace string, inputFile stri
 		errs = append(errs, conversionErrs...)
 		gatewayResources = append(gatewayResources, providerGatewayResources)
 	}
-	notificationTablesMap := notifications.NotificationAggr.CreateNotificationTables()
+	notificationTablesMap := notificationAggr.CreateNotificationTables()
 	if len(errs) > 0 {
 		return nil, notificationTablesMap, aggregatedErrs(errs)
 	}

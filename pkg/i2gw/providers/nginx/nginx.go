@@ -23,6 +23,7 @@ import (
 
 	"github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw"
 	emitterir "github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/emitter_intermediate"
+	"github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/notifications"
 	providerir "github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/provider_intermediate"
 )
 
@@ -36,13 +37,16 @@ type Provider struct {
 	*storage
 	*resourceReader
 	*resourcesToIRConverter
+	notifier *notifications.Notifier
 }
 
 // NewProvider constructs and returns the nginx implementation of i2gw.Provider
 func NewProvider(conf *i2gw.ProviderConf) i2gw.Provider {
+	notifier := notifications.NewNotifier(conf.NotificationAgg, Name)
 	return &Provider{
 		resourceReader:         newResourceReader(conf),
 		resourcesToIRConverter: newResourcesToIRConverter(),
+		notifier:               notifier,
 	}
 }
 
@@ -68,6 +72,6 @@ func (p *Provider) ReadResourcesFromFile(_ context.Context, filename string) err
 
 // ToIR converts the provider resources to intermediate representation
 func (p *Provider) ToIR() (emitterir.EmitterIR, field.ErrorList) {
-	ir, errs := p.resourcesToIRConverter.convert(p.storage)
+	ir, errs := p.resourcesToIRConverter.convert(p.storage, p.notifier)
 	return providerir.ToEmitterIR(ir), errs
 }

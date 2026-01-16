@@ -36,7 +36,7 @@ import (
 // a comma-separated list.
 //
 // Example: konghq.com/plugins: "plugin1,plugin2"
-func pluginsFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedName]map[string]int32, ir *providerir.ProviderIR) field.ErrorList {
+func pluginsFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedName]map[string]int32, ir *providerir.ProviderIR, notifier *notifications.Notifier) field.ErrorList {
 	ruleGroups := common.GetRuleGroups(ingresses)
 	for _, rg := range ruleGroups {
 		for _, rule := range rg.Rules {
@@ -46,7 +46,7 @@ func pluginsFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedName
 				return field.ErrorList{field.InternalError(nil, errors.New("HTTPRoute does not exist - this should never happen"))}
 			}
 			filters := parsePluginsAnnotation(rule.Ingress.Annotations)
-			patchHTTPRoutePlugins(&httpRouteContext.HTTPRoute, filters)
+			patchHTTPRoutePlugins(&httpRouteContext.HTTPRoute, filters, notifier)
 		}
 	}
 	return nil
@@ -76,7 +76,7 @@ func parsePluginsAnnotation(annotations map[string]string) []gatewayv1.HTTPRoute
 	return filters
 }
 
-func patchHTTPRoutePlugins(httpRoute *gatewayv1.HTTPRoute, extensionRefs []gatewayv1.HTTPRouteFilter) {
+func patchHTTPRoutePlugins(httpRoute *gatewayv1.HTTPRoute, extensionRefs []gatewayv1.HTTPRouteFilter, notifier *notifications.Notifier) {
 	for i := range httpRoute.Spec.Rules {
 		if httpRoute.Spec.Rules[i].Filters == nil {
 			httpRoute.Spec.Rules[i].Filters = make([]gatewayv1.HTTPRouteFilter, 0)
@@ -84,6 +84,6 @@ func patchHTTPRoutePlugins(httpRoute *gatewayv1.HTTPRoute, extensionRefs []gatew
 		httpRoute.Spec.Rules[i].Filters = append(httpRoute.Spec.Rules[i].Filters, extensionRefs...)
 	}
 	if len(extensionRefs) != 0 {
-		notify(notifications.InfoNotification, fmt.Sprintf("parsed \"%v\" annotation of ingress and patched %v fields", kongAnnotation(pluginsKey), field.NewPath("httproute", "spec", "rules").Key("").Child("filters")), httpRoute)
+		notifier.Notify(notifications.InfoNotification, fmt.Sprintf("parsed \"%v\" annotation of ingress and patched %v fields", kongAnnotation(pluginsKey), field.NewPath("httproute", "spec", "rules").Key("").Child("filters")), httpRoute)
 	}
 }

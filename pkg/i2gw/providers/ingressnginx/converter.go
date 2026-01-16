@@ -18,6 +18,7 @@ package ingressnginx
 
 import (
 	"github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw"
+	"github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/notifications"
 	providerir "github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/provider_intermediate"
 	"github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/providers/common"
 	"k8s.io/apimachinery/pkg/util/validation/field"
@@ -38,7 +39,7 @@ func newResourcesToIRConverter() *resourcesToIRConverter {
 	}
 }
 
-func (c *resourcesToIRConverter) convert(storage *storage) (providerir.ProviderIR, field.ErrorList) {
+func (c *resourcesToIRConverter) convert(storage *storage, notifier *notifications.Notifier) (providerir.ProviderIR, field.ErrorList) {
 
 	// TODO(liorliberman) temporary until we decide to change ToIR and featureParsers to get a map of [types.NamespacedName]*networkingv1.Ingress instead of a list
 	ingressList := storage.Ingresses.List()
@@ -52,7 +53,7 @@ func (c *resourcesToIRConverter) convert(storage *storage) (providerir.ProviderI
 
 	for _, parseFeatureFunc := range c.featureParsers {
 		// Apply the feature parsing function to the gateway resources, one by one.
-		parseErrs := parseFeatureFunc(ingressList, storage.ServicePorts, &ir)
+		parseErrs := parseFeatureFunc(ingressList, storage.ServicePorts, &ir, notifier)
 		// Append the parsing errors to the error list.
 		errs = append(errs, parseErrs...)
 	}

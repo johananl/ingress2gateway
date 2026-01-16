@@ -26,7 +26,7 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
-// implementationSpecificHTTPPathTypeMatch maps the Implementation Specific
+// implementationSpecificHTTPPathTypeMatch returns a function that maps the Implementation Specific
 // HTTP path and type to the corresponding Gateway HTTP ones.
 //
 // Ingress path with type `ImplementationSpecific` will:
@@ -39,23 +39,25 @@ import (
 // | /v1                                   | /v1 Exact                              |
 // | /v1/                                  | /v1/ Exact                             |
 // | /v1/*                                 | /v1 Prefix                             |
-func implementationSpecificHTTPPathTypeMatch(path *gatewayv1.HTTPPathMatch) {
-	pmExact := gatewayv1.PathMatchExact
-	pmPrefix := gatewayv1.PathMatchPathPrefix
+func implementationSpecificHTTPPathTypeMatch(notifier *notifications.Notifier) func(path *gatewayv1.HTTPPathMatch) {
+	return func(path *gatewayv1.HTTPPathMatch) {
+		pmExact := gatewayv1.PathMatchExact
+		pmPrefix := gatewayv1.PathMatchPathPrefix
 
-	if *path.Value == "/*" {
+		if *path.Value == "/*" {
+			path.Type = &pmPrefix
+			path.Value = common.PtrTo("/")
+			return
+		}
+		if !strings.HasSuffix(*path.Value, "/*") {
+			path.Type = &pmExact
+			return
+		}
+
+		currentValue := *path.Value
 		path.Type = &pmPrefix
-		path.Value = common.PtrTo("/")
-		return
+		path.Value = common.PtrTo(strings.TrimSuffix(*path.Value, "/*"))
+		notifier.Notify(notifications.WarningNotification, fmt.Sprintf("After conversion, ImplementationSpecific Path %s/* will additionally map to %s. See https://github.com/kubernetes-sigs/ingress2gateway/blob/main/pkg/i2gw/providers/gce/README.md for details.", currentValue, *path.Value))
+		klog.Warningf("After conversion, ImplementationSpecific Path %s/* will additionally map to %s. See https://github.com/kubernetes-sigs/ingress2gateway/blob/main/pkg/i2gw/providers/gce/README.md for details.", currentValue, *path.Value)
 	}
-	if !strings.HasSuffix(*path.Value, "/*") {
-		path.Type = &pmExact
-		return
-	}
-
-	currentValue := *path.Value
-	path.Type = &pmPrefix
-	path.Value = common.PtrTo(strings.TrimSuffix(*path.Value, "/*"))
-	notify(notifications.WarningNotification, fmt.Sprintf("After conversion, ImplementationSpecific Path %s/* will additionally map to %s. See https://github.com/kubernetes-sigs/ingress2gateway/blob/main/pkg/i2gw/providers/gce/README.md for details.", currentValue, *path.Value))
-	klog.Warningf("After conversion, ImplementationSpecific Path %s/* will additionally map to %s. See https://github.com/kubernetes-sigs/ingress2gateway/blob/main/pkg/i2gw/providers/gce/README.md for details.", currentValue, *path.Value)
 }

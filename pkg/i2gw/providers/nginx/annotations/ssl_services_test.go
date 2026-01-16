@@ -106,7 +106,7 @@ func TestSSLServicesAnnotation(t *testing.T) {
 				BackendTLSPolicies: make(map[types.NamespacedName]gatewayv1.BackendTLSPolicy),
 			}
 
-			errs := processSSLServicesAnnotation(ingress, tt.annotation, &ir)
+			errs := processSSLServicesAnnotation(ingress, tt.annotation, &ir, nil)
 			if len(errs) > 0 {
 				t.Errorf("Unexpected errors: %v", errs)
 				return
@@ -195,7 +195,7 @@ func TestSSLServicesFeature(t *testing.T) {
 				BackendTLSPolicies: make(map[types.NamespacedName]gatewayv1.BackendTLSPolicy),
 			}
 
-			errs := SSLServicesFeature(tt.ingresses, nil, &ir)
+			errs := SSLServicesFeature(tt.ingresses, nil, &ir, nil)
 			if len(errs) > 0 {
 				t.Errorf("Unexpected errors: %v", errs)
 				return

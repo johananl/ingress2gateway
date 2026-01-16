@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	"github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw"
+	"github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/notifications"
 	providerir "github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/provider_intermediate"
 	"github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/providers/common"
 	"github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/providers/kong/crds"
@@ -46,7 +47,7 @@ func newResourcesToIRConverter() *resourcesToIRConverter {
 	}
 }
 
-func (c *resourcesToIRConverter) convert(storage *storage) (providerir.ProviderIR, field.ErrorList) {
+func (c *resourcesToIRConverter) convert(storage *storage, notifier *notifications.Notifier) (providerir.ProviderIR, field.ErrorList) {
 	ingressList := []networkingv1.Ingress{}
 	for _, ingress := range storage.Ingresses {
 		ingressList = append(ingressList, *ingress)
@@ -59,12 +60,15 @@ func (c *resourcesToIRConverter) convert(storage *storage) (providerir.ProviderI
 		return providerir.ProviderIR{}, errorList
 	}
 
-	tcpGatewayIR, notificationsAggregator, errs := crds.TCPIngressToGatewayIR(storage.TCPIngresses)
+	tcpGatewayIR, notificationsList, errs := crds.TCPIngressToGatewayIR(storage.TCPIngresses)
 	if len(errs) > 0 {
 		errorList = append(errorList, errs...)
 	}
 
-	dispatchNotification(notificationsAggregator)
+	// Dispatch notifications from TCPIngressToGatewayIR
+	for _, n := range notificationsList {
+		notifier.Notify(n.Type, n.Message, n.CallingObjects...)
+	}
 
 	if len(errorList) > 0 {
 		return providerir.ProviderIR{}, errorList
@@ -78,7 +82,7 @@ func (c *resourcesToIRConverter) convert(storage *storage) (providerir.ProviderI
 
 	for _, parseFeatureFunc := range c.featureParsers {
 		// Apply the feature parsing function to the gateway resources, one by one.
-		errs = parseFeatureFunc(ingressList, storage.ServicePorts, &ir)
+		errs = parseFeatureFunc(ingressList, storage.ServicePorts, &ir, notifier)
 		// Append the parsing errors to the error list.
 		errorList = append(errorList, errs...)
 	}

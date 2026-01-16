@@ -38,7 +38,7 @@ import (
 //
 // All the values defined for each annotation name, and separated by comma, MUST be ORed.
 // All the annotation names MUST be ANDed, with the respective values.
-func headerMatchingFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedName]map[string]int32, ir *providerir.ProviderIR) field.ErrorList {
+func headerMatchingFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedName]map[string]int32, ir *providerir.ProviderIR, notifier *notifications.Notifier) field.ErrorList {
 	ruleGroups := common.GetRuleGroups(ingresses)
 	for _, rg := range ruleGroups {
 		for _, rule := range rg.Rules {
@@ -49,14 +49,14 @@ func headerMatchingFeature(ingresses []networkingv1.Ingress, _ map[types.Namespa
 				return field.ErrorList{field.InternalError(nil, fmt.Errorf("HTTPRoute does not exist - this should never happen"))}
 			}
 
-			patchHTTPRouteHeaderMatching(&httpRouteContext.HTTPRoute, headerskeys, headersValues)
+			patchHTTPRouteHeaderMatching(&httpRouteContext.HTTPRoute, headerskeys, headersValues, notifier)
 		}
 
 	}
 	return nil
 }
 
-func patchHTTPRouteHeaderMatching(httpRoute *gatewayv1.HTTPRoute, headerNames []string, headerValues [][]string) {
+func patchHTTPRouteHeaderMatching(httpRoute *gatewayv1.HTTPRoute, headerNames []string, headerValues [][]string, notifier *notifications.Notifier) {
 	for i := range httpRoute.Spec.Rules {
 		newMatches := []gatewayv1.HTTPRouteMatch{}
 		for _, match := range httpRoute.Spec.Rules[i].Matches {
@@ -83,7 +83,7 @@ func patchHTTPRouteHeaderMatching(httpRoute *gatewayv1.HTTPRoute, headerNames []
 		}
 		httpRoute.Spec.Rules[i].Matches = newMatches
 		if len(newMatches) > 0 {
-			notify(notifications.InfoNotification, fmt.Sprintf("parsed \"%v\" annotation of ingress and patched %v fields", kongAnnotation(headersKey), field.NewPath("httproute", "spec", "rules").Key("").Child("matches")), httpRoute)
+			notifier.Notify(notifications.InfoNotification, fmt.Sprintf("parsed \"%v\" annotation of ingress and patched %v fields", kongAnnotation(headersKey), field.NewPath("httproute", "spec", "rules").Key("").Child("matches")), httpRoute)
 		}
 	}
 }

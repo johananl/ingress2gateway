@@ -71,7 +71,7 @@ func parseCanaryConfig(ingress *networkingv1.Ingress) (canaryConfig, error) {
 	return config, nil
 }
 
-func canaryFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedName]map[string]int32, ir *providerir.ProviderIR) field.ErrorList {
+func canaryFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedName]map[string]int32, ir *providerir.ProviderIR, notifier *notifications.Notifier) field.ErrorList {
 	ruleGroups := common.GetRuleGroups(ingresses)
 	var errList field.ErrorList
 
@@ -159,7 +159,7 @@ func canaryFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedName]
 				nonCanaryWeight := canaryConfig.weightTotal - canaryWeight
 				nonCanaryBackend.Weight = &nonCanaryWeight
 
-				notify(notifications.InfoNotification, fmt.Sprintf("parsed canary annotations of ingress %s/%s and set weights (canary: %d, non-canary: %d, total: %d)",
+				notifier.Notify(notifications.InfoNotification, fmt.Sprintf("parsed canary annotations of ingress %s/%s and set weights (canary: %d, non-canary: %d, total: %d)",
 					canarySourceIngress.Namespace, canarySourceIngress.Name, canaryWeight, nonCanaryWeight, canaryConfig.weightTotal), &httpRouteContext.HTTPRoute)
 			}
 		}

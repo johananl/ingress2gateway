@@ -26,10 +26,6 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
-func init() {
-	NotificationAggr = NotificationAggregator{Notifications: map[string][]Notification{}}
-}
-
 const (
 	InfoNotification    MessageType = "INFO"
 	WarningNotification MessageType = "WARNING"
@@ -49,7 +45,36 @@ type NotificationAggregator struct {
 	Notifications map[string][]Notification
 }
 
-var NotificationAggr NotificationAggregator
+// NewNotificationAggregator creates a new NotificationAggregator instance.
+func NewNotificationAggregator() *NotificationAggregator {
+	return &NotificationAggregator{
+		Notifications: make(map[string][]Notification),
+	}
+}
+
+// Notifier provides a convenient way to dispatch notifications for a specific provider.
+// It should be stored in structs rather than used as a package-level variable.
+type Notifier struct {
+	aggregator   *NotificationAggregator
+	providerName string
+}
+
+// NewNotifier creates a Notifier bound to a specific provider name.
+func NewNotifier(aggregator *NotificationAggregator, providerName string) *Notifier {
+	return &Notifier{
+		aggregator:   aggregator,
+		providerName: providerName,
+	}
+}
+
+// Notify dispatches a notification to the aggregator.
+func (n *Notifier) Notify(mType MessageType, message string, callingObject ...client.Object) {
+	if n == nil || n.aggregator == nil {
+		return
+	}
+	notification := NewNotification(mType, message, callingObject...)
+	n.aggregator.DispatchNotification(notification, n.providerName)
+}
 
 // DispatchNotification is used to send a notification to the NotificationAggregator
 func (na *NotificationAggregator) DispatchNotification(notification Notification, ProviderName string) {

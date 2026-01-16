@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	"github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw"
+	"github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/notifications"
 	providerir "github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/provider_intermediate"
 	"github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/providers/common"
 	"github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/providers/nginx/annotations"
@@ -48,7 +49,7 @@ func newResourcesToIRConverter() *resourcesToIRConverter {
 	}
 }
 
-func (c *resourcesToIRConverter) convert(storage *storage) (providerir.ProviderIR, field.ErrorList) {
+func (c *resourcesToIRConverter) convert(storage *storage, notifier *notifications.Notifier) (providerir.ProviderIR, field.ErrorList) {
 	ingressList := []networkingv1.Ingress{}
 	for _, ingress := range storage.Ingresses {
 		if ingress != nil {
@@ -62,7 +63,7 @@ func (c *resourcesToIRConverter) convert(storage *storage) (providerir.ProviderI
 	}
 
 	for _, parseFeatureFunc := range c.featureParsers {
-		errs := parseFeatureFunc(ingressList, storage.ServicePorts, &ir)
+		errs := parseFeatureFunc(ingressList, storage.ServicePorts, &ir, notifier)
 		errorList = append(errorList, errs...)
 	}
 

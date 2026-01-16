@@ -22,6 +22,7 @@ import (
 
 	"github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw"
 	emitterir "github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/emitter_intermediate"
+	"github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/notifications"
 	providerir "github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/provider_intermediate"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
@@ -39,21 +40,24 @@ type Provider struct {
 	storage                *storage
 	resourceReader         *resourceReader
 	resourcesToIRConverter *resourcesToIRConverter
+	notifier               *notifications.Notifier
 }
 
 // NewProvider constructs and returns the apisix implementation of i2gw.Provider.
 func NewProvider(conf *i2gw.ProviderConf) i2gw.Provider {
+	notifier := notifications.NewNotifier(conf.NotificationAgg, string(Name))
 	return &Provider{
 		storage:                newResourcesStorage(),
 		resourceReader:         newResourceReader(conf),
 		resourcesToIRConverter: newResourcesToIRConverter(),
+		notifier:               notifier,
 	}
 }
 
 // ToIR converts stored Apisix API entities to emitterir.IR
 // including the apisix specific features.
 func (p *Provider) ToIR() (emitterir.EmitterIR, field.ErrorList) {
-	ir, errs := p.resourcesToIRConverter.convertToIR(p.storage)
+	ir, errs := p.resourcesToIRConverter.convertToIR(p.storage, p.notifier)
 	return providerir.ToEmitterIR(ir), errs
 }
 

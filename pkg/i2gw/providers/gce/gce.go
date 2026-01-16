@@ -40,23 +40,27 @@ type Provider struct {
 	storage     *storage
 	reader      reader
 	irConverter resourcesToIRConverter
+	notifier    *notifications.Notifier
 }
 
 func NewProvider(conf *i2gw.ProviderConf) i2gw.Provider {
+	notifier := notifications.NewNotifier(conf.NotificationAgg, ProviderName)
+
 	// Add BackendConfig and FrontendConfig to Schema when reading in-cluster
 	// so these resources can be recognized.
 	if conf.Client != nil {
 		if err := backendconfigv1.AddToScheme(conf.Client.Scheme()); err != nil {
-			notify(notifications.ErrorNotification, "Failed to add v1 BackendConfig Scheme")
+			notifier.Notify(notifications.ErrorNotification, "Failed to add v1 BackendConfig Scheme")
 		}
 		if err := frontendconfigv1beta1.AddToScheme(conf.Client.Scheme()); err != nil {
-			notify(notifications.ErrorNotification, "Failed to add v1beta1 FrontendConfig Scheme")
+			notifier.Notify(notifications.ErrorNotification, "Failed to add v1beta1 FrontendConfig Scheme")
 		}
 	}
 	return &Provider{
 		storage:     newResourcesStorage(),
 		reader:      newResourceReader(conf),
-		irConverter: newResourcesToIRConverter(conf),
+		irConverter: newResourcesToIRConverter(conf, notifier),
+		notifier:    notifier,
 	}
 }
 

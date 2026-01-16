@@ -37,7 +37,7 @@ import (
 // konghq.com/methods: "GET,POST"
 //
 // All the values defined and separated by comma, MUST be ORed.
-func methodMatchingFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedName]map[string]int32, ir *providerir.ProviderIR) field.ErrorList {
+func methodMatchingFeature(ingresses []networkingv1.Ingress, _ map[types.NamespacedName]map[string]int32, ir *providerir.ProviderIR, notifier *notifications.Notifier) field.ErrorList {
 	ruleGroups := common.GetRuleGroups(ingresses)
 	for _, rg := range ruleGroups {
 		for _, rule := range rg.Rules {
@@ -50,13 +50,13 @@ func methodMatchingFeature(ingresses []networkingv1.Ingress, _ map[types.Namespa
 			if len(errs) != 0 {
 				return errs
 			}
-			patchHTTPRouteMethodMatching(&httpRouteContext.HTTPRoute, methods)
+			patchHTTPRouteMethodMatching(&httpRouteContext.HTTPRoute, methods, notifier)
 		}
 	}
 	return nil
 }
 
-func patchHTTPRouteMethodMatching(httpRoute *gatewayv1.HTTPRoute, methods []gatewayv1.HTTPMethod) {
+func patchHTTPRouteMethodMatching(httpRoute *gatewayv1.HTTPRoute, methods []gatewayv1.HTTPMethod, notifier *notifications.Notifier) {
 	for i, rule := range httpRoute.Spec.Rules {
 		matches := []gatewayv1.HTTPRouteMatch{}
 		for _, match := range rule.Matches {
@@ -69,7 +69,7 @@ func patchHTTPRouteMethodMatching(httpRoute *gatewayv1.HTTPRoute, methods []gate
 		}
 		if len(matches) > 0 {
 			httpRoute.Spec.Rules[i].Matches = matches
-			notify(notifications.InfoNotification, fmt.Sprintf("parsed \"%v\" annotation of ingress and patched %v fields", kongAnnotation(methodsKey), field.NewPath("httproute", "spec", "rules").Key("").Child("matches").Key("").Child("method")), httpRoute)
+			notifier.Notify(notifications.InfoNotification, fmt.Sprintf("parsed \"%v\" annotation of ingress and patched %v fields", kongAnnotation(methodsKey), field.NewPath("httproute", "spec", "rules").Key("").Child("matches").Key("").Child("method")), httpRoute)
 		}
 	}
 }
