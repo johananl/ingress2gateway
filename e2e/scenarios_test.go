@@ -131,11 +131,6 @@ func TestKongIngress(t *testing.T) {
 			runTestCase(t, &testCase{
 				gatewayImplementation: kong.Name,
 				providers:             []string{kong.Name},
-				providerFlags: map[string]map[string]string{
-					kong.Name: {
-						"ingress-class": kong.KongIngressClass,
-					},
-				},
 				ingresses: []*networkingv1.Ingress{
 					basicIngress().
 						withName("foo").
@@ -151,11 +146,6 @@ func TestKongIngress(t *testing.T) {
 			runTestCase(t, &testCase{
 				gatewayImplementation: kong.Name,
 				providers:             []string{kong.Name},
-				providerFlags: map[string]map[string]string{
-					kong.Name: {
-						"ingress-class": kong.KongIngressClass,
-					},
-				},
 				ingresses: []*networkingv1.Ingress{
 					basicIngress().
 						withName("foo").
@@ -179,11 +169,6 @@ func TestKongIngress(t *testing.T) {
 			runTestCase(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{kong.Name},
-				providerFlags: map[string]map[string]string{
-					kong.Name: {
-						"ingress-class": kong.KongIngressClass,
-					},
-				},
 				ingresses: []*networkingv1.Ingress{
 					basicIngress().
 						withName("foo").
@@ -199,11 +184,6 @@ func TestKongIngress(t *testing.T) {
 			runTestCase(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{kong.Name},
-				providerFlags: map[string]map[string]string{
-					kong.Name: {
-						"ingress-class": kong.KongIngressClass,
-					},
-				},
 				ingresses: []*networkingv1.Ingress{
 					basicIngress().
 						withName("foo").
