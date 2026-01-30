@@ -17,11 +17,20 @@ limitations under the License.
 package ingressnginx
 
 import (
-	"github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/notifications"
+	"log/slog"
+
+	"github.com/kubernetes-sigs/ingress2gateway/pkg/i2gw/logging"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func notify(mType notifications.MessageType, message string, callingObject ...client.Object) {
-	newNotification := notifications.NewNotification(mType, message, callingObject...)
-	notifications.NotificationAggr.DispatchNotification(newNotification, string(Name))
+func logInfo(message string, callingObjects ...client.Object) {
+	slog.Info(message, logging.Provider(string(Name)), logging.ObjectRefs(callingObjects...))
+}
+
+func logWarn(message string, callingObjects ...client.Object) {
+	slog.Warn(message, logging.Provider(string(Name)), logging.ObjectRefs(callingObjects...))
+}
+
+func logError(message string, callingObjects ...client.Object) {
+	slog.Error(message, logging.Provider(string(Name)), logging.ObjectRefs(callingObjects...))
 }
