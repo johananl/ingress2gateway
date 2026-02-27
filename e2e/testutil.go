@@ -119,7 +119,7 @@ func runTestCase(t *testing.T, tc *testCase) {
 	})
 	require.NoError(t, crdResource.wait(), "Gateway API CRDs installation failed")
 
-	providers := deployProviders(ctx, t, k8sClient, kubeconfig, tc.providers, tc.gatewayImplementation, skipCleanup)
+	providers := deployProviders(ctx, t, k8sClient, gwClient, kubeconfig, tc.providers, tc.gatewayImplementation, skipCleanup)
 	gwImpl := deployGatewayImplementation(ctx, t, k8sClient, gwClient, kubeconfig, tc.gatewayImplementation, skipCleanup)
 
 	resources := append(providers, gwImpl)
@@ -231,6 +231,7 @@ func deployProviders(
 	ctx context.Context,
 	t *testing.T,
 	k8sClient *kubernetes.Clientset,
+	gwClient *gwclientset.Clientset,
 	kubeconfig string,
 	providers []string,
 	gwImpl string,
@@ -247,14 +248,14 @@ func deployProviders(
 				return deployIngressNginx(ctx, t, k8sClient, kubeconfig, ns, skipCleanup)
 			})
 		case kong.Name:
-			// If Kong is also the gateway implementation, skip deploying Kong ingress separately.
-			// The gateway deployment will handle both Ingress and Gateway API.
+			// If Kong is also the gateway implementation, the gateway deployment will acquire
+			// the same resource — skip the redundant acquire here.
 			if gwImpl == kong.Name {
 				continue
 			}
 			ns := fmt.Sprintf("%s-kong", e2ePrefix)
 			r = globalResourceManager.acquire(kong.Name, func() (cleanupFunc, error) {
-				return deployKongIngress(ctx, t, k8sClient, kubeconfig, ns, skipCleanup)
+				return deployKong(ctx, t, k8sClient, gwClient, kubeconfig, ns, skipCleanup)
 			})
 		default:
 			t.Fatalf("Unknown ingress provider: %s", p)
@@ -285,7 +286,7 @@ func deployGatewayImplementation(
 	case kong.Name:
 		ns := fmt.Sprintf("%s-kong", e2ePrefix)
 		r = globalResourceManager.acquire(kong.Name, func() (cleanupFunc, error) {
-			return deployGatewayAPIKong(ctx, t, k8sClient, gwClient, kubeconfig, ns, skipCleanup)
+			return deployKong(ctx, t, k8sClient, gwClient, kubeconfig, ns, skipCleanup)
 		})
 	case kgatewayName:
 		ns := fmt.Sprintf("%s-kgateway-system", e2ePrefix)

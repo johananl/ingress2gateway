@@ -37,7 +37,7 @@ const (
 	kongControllerName = "konghq.com/kic-gateway-controller"
 )
 
-func deployGatewayAPIKong(
+func deployKong(
 	ctx context.Context,
 	l logger,
 	client *kubernetes.Clientset,
