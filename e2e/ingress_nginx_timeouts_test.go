@@ -34,7 +34,7 @@ func TestIngressNGINXTimeouts(t *testing.T) {
 	t.Run("to Istio", func(t *testing.T) {
 		t.Parallel()
 		t.Run("slow response allowed", func(t *testing.T) {
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name},
 				providerFlags: map[string]map[string]string{
@@ -60,10 +60,10 @@ func TestIngressNGINXTimeouts(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 		t.Run("short timeout", func(t *testing.T) {
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name},
 				providerFlags: map[string]map[string]string{
@@ -89,7 +89,7 @@ func TestIngressNGINXTimeouts(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 	})
 }

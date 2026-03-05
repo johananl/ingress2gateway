@@ -56,7 +56,7 @@ func TestIngressNGINXRegex(t *testing.T) {
 				build()
 			regex.Spec.Rules[0].HTTP.Paths[0].PathType = &implementationSpecific
 
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name},
 				providerFlags: map[string]map[string]string{
@@ -79,7 +79,7 @@ func TestIngressNGINXRegex(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 		t.Run("rewrite-target implies host-level matching", func(t *testing.T) {
 			suffix, err := randString()
@@ -105,7 +105,7 @@ func TestIngressNGINXRegex(t *testing.T) {
 				build()
 			rewriteRegex.Spec.Rules[0].HTTP.Paths[0].PathType = &implementationSpecific
 
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name},
 				providerFlags: map[string]map[string]string{
@@ -128,7 +128,7 @@ func TestIngressNGINXRegex(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 		t.Run("regex ending with dollar matches only exact path", func(t *testing.T) {
 			suffix, err := randString()
@@ -145,7 +145,7 @@ func TestIngressNGINXRegex(t *testing.T) {
 				build()
 			ing.Spec.Rules[0].HTTP.Paths[0].PathType = &implementationSpecific
 
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name},
 				providerFlags: map[string]map[string]string{
@@ -172,7 +172,7 @@ func TestIngressNGINXRegex(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 	})
 }

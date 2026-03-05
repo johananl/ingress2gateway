@@ -37,7 +37,7 @@ func TestIngressNGINXRedirect(t *testing.T) {
 			require.NoError(t, err)
 			redirectURL := fmt.Sprintf("https://new-site-%s.example.com/new-path/", suffix)
 
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name},
 				providerFlags: map[string]map[string]string{
@@ -70,7 +70,7 @@ func TestIngressNGINXRedirect(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 
 		t.Run("temporal redirect", func(t *testing.T) {
@@ -78,7 +78,7 @@ func TestIngressNGINXRedirect(t *testing.T) {
 			require.NoError(t, err)
 			redirectURL := fmt.Sprintf("https://temp-site-%s.example.com/temp-path/", suffix)
 
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name},
 				providerFlags: map[string]map[string]string{
@@ -111,7 +111,7 @@ func TestIngressNGINXRedirect(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 
 		t.Run("permanent redirect with supported custom code", func(t *testing.T) {
@@ -119,7 +119,7 @@ func TestIngressNGINXRedirect(t *testing.T) {
 			require.NoError(t, err)
 			redirectURL := fmt.Sprintf("https://custom-code-%s.example.com/path/", suffix)
 
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name},
 				providerFlags: map[string]map[string]string{
@@ -153,7 +153,7 @@ func TestIngressNGINXRedirect(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 
 		t.Run("temporal redirect with supported custom code", func(t *testing.T) {
@@ -161,7 +161,7 @@ func TestIngressNGINXRedirect(t *testing.T) {
 			require.NoError(t, err)
 			redirectURL := fmt.Sprintf("https://custom-temp-%s.example.com/path/", suffix)
 
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name},
 				providerFlags: map[string]map[string]string{
@@ -195,13 +195,13 @@ func TestIngressNGINXRedirect(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 
 		t.Run("redirect with scheme and hostname only", func(t *testing.T) {
 			redirectURL := "https://another-domain.example.com/"
 
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name},
 				providerFlags: map[string]map[string]string{
@@ -234,7 +234,7 @@ func TestIngressNGINXRedirect(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 
 		t.Run("redirect with port", func(t *testing.T) {
@@ -242,7 +242,7 @@ func TestIngressNGINXRedirect(t *testing.T) {
 			require.NoError(t, err)
 			redirectURL := fmt.Sprintf("https://custom-port-%s.example.com:8443/secure/", suffix)
 
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name},
 				providerFlags: map[string]map[string]string{
@@ -275,7 +275,7 @@ func TestIngressNGINXRedirect(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 
 		t.Run("both redirect annotations - temporal takes priority", func(t *testing.T) {
@@ -284,7 +284,7 @@ func TestIngressNGINXRedirect(t *testing.T) {
 			permanentURL := fmt.Sprintf("https://permanent-%s.example.com/path/", suffix)
 			temporalURL := fmt.Sprintf("https://temporal-%s.example.com/path/", suffix)
 
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name},
 				providerFlags: map[string]map[string]string{
@@ -318,7 +318,7 @@ func TestIngressNGINXRedirect(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 	})
 }

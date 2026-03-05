@@ -30,7 +30,7 @@ func TestIngressNGINXPathRewrite(t *testing.T) {
 	t.Run("to Istio", func(t *testing.T) {
 		t.Parallel()
 		t.Run("basic conversion", func(t *testing.T) {
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name},
 				providerFlags: map[string]map[string]string{
@@ -52,7 +52,7 @@ func TestIngressNGINXPathRewrite(t *testing.T) {
 						&httpRequestVerifier{path: "/abc", bodyRegex: regexp.MustCompile(`"X-Forwarded-Prefix":\["/abc"\]`)},
 					},
 				},
-			})
+			}).run()
 		})
 	})
 }

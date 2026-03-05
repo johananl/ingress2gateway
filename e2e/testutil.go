@@ -65,13 +65,29 @@ type testCase struct {
 	allowExperimentalGWAPI bool
 	emitter                string
 	verifiers              map[string][]verifier
-	// setup is an optional callback that runs after secrets are created and before ingresses.
-	// It receives the app namespace, k8s client, and skipCleanup flag. Returned cleanup func
-	// is registered via t.Cleanup.
-	setup func(ctx context.Context, t *testing.T, client *kubernetes.Clientset, namespace string, skipCleanup bool)
 }
 
-func runTestCase(t *testing.T, tc *testCase) {
+// testEnv holds the runtime context created during test environment setup.
+// Tests that need custom setup between environment creation and test execution
+// (e.g. deploying a TLS backend) can use the fields directly.
+type testEnv struct {
+	Ctx         context.Context
+	T           *testing.T
+	K8sClient   *kubernetes.Clientset
+	Namespace   string
+	SkipCleanup bool
+
+	tc         *testCase
+	kubeconfig string
+	gwClient   *gwclientset.Clientset
+	restConfig *rest.Config
+	randPrefix string
+}
+
+// setupTestEnv creates the test namespace, deploys CRDs, providers, gateway
+// implementation, dummy apps, and creates secrets from tc. The returned testEnv
+// can be used for additional test-specific setup before calling run().
+func setupTestEnv(t *testing.T, tc *testCase) *testEnv {
 	t.Parallel()
 
 	if len(tc.providers) == 0 {
@@ -165,20 +181,36 @@ func runTestCase(t *testing.T, tc *testCase) {
 		t.Cleanup(cleanupSecrets)
 	}
 
-	if tc.setup != nil {
-		tc.setup(ctx, t, k8sClient, appNS, skipCleanup)
+	return &testEnv{
+		Ctx:         ctx,
+		T:           t,
+		K8sClient:   k8sClient,
+		Namespace:   appNS,
+		SkipCleanup: skipCleanup,
+		tc:          tc,
+		kubeconfig:  kubeconfig,
+		gwClient:    gwClient,
+		restConfig:  restConfig,
+		randPrefix:  randPrefix,
 	}
+}
 
-	cleanupIngresses, err := createIngresses(ctx, t, k8sClient, appNS, tc.ingresses, skipCleanup)
+// run creates ingresses from the test case, runs ingress2gateway, creates
+// gateway resources, and verifies both ingress and gateway traffic.
+func (env *testEnv) run() {
+	t := env.T
+	tc := env.tc
+
+	cleanupIngresses, err := createIngresses(env.Ctx, t, env.K8sClient, env.Namespace, tc.ingresses, env.SkipCleanup)
 	require.NoError(t, err)
 	t.Cleanup(cleanupIngresses)
 
 	// Set up port forwarding to the ingress controllers for verification.
 	ingressPortForwarders, ingressAddresses := setUpIngressPortForwarding(
-		ctx,
+		env.Ctx,
 		t,
-		k8sClient,
-		restConfig,
+		env.K8sClient,
+		env.restConfig,
 		tc.providers,
 		testCaseNeedsHTTPS(tc),
 	)
@@ -188,14 +220,14 @@ func runTestCase(t *testing.T, tc *testCase) {
 		}
 	})
 
-	verifyIngresses(ctx, t, tc, ingressAddresses)
+	verifyIngresses(env.Ctx, t, tc, ingressAddresses)
 
 	// Run the ingress2gateway binary to convert ingresses to Gateway API resources.
 	res := runI2GW(
-		ctx,
+		env.Ctx,
 		t,
-		kubeconfig,
-		appNS,
+		env.kubeconfig,
+		env.Namespace,
 		tc.providers,
 		tc.providerFlags,
 		tc.allowExperimentalGWAPI,
@@ -211,18 +243,18 @@ func runTestCase(t *testing.T, tc *testCase) {
 		}
 	}
 
-	cleanupGatewayResources, err := createGatewayResources(ctx, t, gwClient, appNS, res, skipCleanup)
+	cleanupGatewayResources, err := createGatewayResources(env.Ctx, t, env.gwClient, env.Namespace, res, env.SkipCleanup)
 	require.NoError(t, err, "creating gateway resources")
 	t.Cleanup(cleanupGatewayResources)
 
 	// Set up port forwarding to each gateway for verification.
 	gatewayPortForwarders, gwAddresses := setUpGatewayPortForwarding(
-		ctx,
+		env.Ctx,
 		t,
-		k8sClient,
-		restConfig,
+		env.K8sClient,
+		env.restConfig,
 		getGateways(res),
-		appNS,
+		env.Namespace,
 		tc.gatewayImplementation,
 		testCaseNeedsHTTPS(tc),
 	)
@@ -232,7 +264,7 @@ func runTestCase(t *testing.T, tc *testCase) {
 		}
 	})
 
-	verifyGatewayResources(ctx, t, tc, gwAddresses)
+	verifyGatewayResources(env.Ctx, t, tc, gwAddresses)
 }
 
 func deployProviders(

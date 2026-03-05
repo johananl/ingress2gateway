@@ -35,7 +35,7 @@ func TestIngressNGINXCanary(t *testing.T) {
 			suffix, err := randString()
 			require.NoError(t, err)
 			host := fmt.Sprintf("canary-%s.com", suffix)
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name},
 				providerFlags: map[string]map[string]string{
@@ -72,7 +72,7 @@ func TestIngressNGINXCanary(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 	})
 }

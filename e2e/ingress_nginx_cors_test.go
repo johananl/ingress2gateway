@@ -37,7 +37,7 @@ func TestIngressNGINXCORS(t *testing.T) {
 			exposeHeaders := "X-Expose-1, X-Expose-2"
 			maxAge := "600"
 
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation:  istio.ProviderName,
 				allowExperimentalGWAPI: true,
 				providers:              []string{ingressnginx.Name},
@@ -139,13 +139,13 @@ func TestIngressNGINXCORS(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 		t.Run("cors defaults", func(t *testing.T) {
 			origin := "https://cors-defaults.example.com"
 			maxAge := "1728000"
 
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation:  istio.ProviderName,
 				allowExperimentalGWAPI: true,
 				providers:              []string{ingressnginx.Name},
@@ -244,13 +244,13 @@ func TestIngressNGINXCORS(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 		t.Run("cors denied origin", func(t *testing.T) {
 			allowedOrigin := "https://cors-allowed.example.com"
 			deniedOrigin := "https://cors-denied.example.com"
 
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation:  istio.ProviderName,
 				allowExperimentalGWAPI: true,
 				providers:              []string{ingressnginx.Name},
@@ -293,7 +293,7 @@ func TestIngressNGINXCORS(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 		t.Run("cors denied method and header", func(t *testing.T) {
 			origin := "https://cors-method.example.com"
@@ -302,7 +302,7 @@ func TestIngressNGINXCORS(t *testing.T) {
 			deniedMethod := "DELETE"
 			deniedHeader := "X-Not-Allowed"
 
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation:  istio.ProviderName,
 				allowExperimentalGWAPI: true,
 				providers:              []string{ingressnginx.Name},
@@ -373,7 +373,7 @@ func TestIngressNGINXCORS(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 	})
 }

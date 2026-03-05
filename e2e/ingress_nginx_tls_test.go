@@ -39,7 +39,7 @@ func TestIngressNGINXTLS(t *testing.T) {
 			if err != nil {
 				t.Fatalf("creating TLS secret: %v", err)
 			}
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name},
 				providerFlags: map[string]map[string]string{
@@ -80,7 +80,7 @@ func TestIngressNGINXTLS(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 		t.Run("ssl-redirect annotation", func(t *testing.T) {
 			suffix, err := randString()
@@ -95,7 +95,7 @@ func TestIngressNGINXTLS(t *testing.T) {
 			if err != nil {
 				t.Fatalf("creating no-redirect TLS secret: %v", err)
 			}
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name},
 				providerFlags: map[string]map[string]string{
@@ -156,7 +156,7 @@ func TestIngressNGINXTLS(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 	})
 }

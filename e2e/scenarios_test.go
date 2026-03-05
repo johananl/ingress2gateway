@@ -40,7 +40,7 @@ func TestIngressNginx(t *testing.T) {
 	t.Run("to Istio", func(t *testing.T) {
 		t.Parallel()
 		t.Run("basic conversion", func(t *testing.T) {
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name},
 				providerFlags: map[string]map[string]string{
@@ -57,13 +57,13 @@ func TestIngressNginx(t *testing.T) {
 				verifiers: map[string][]verifier{
 					"foo": {&httpRequestVerifier{path: "/"}},
 				},
-			})
+			}).run()
 		})
 		prefix, err := randString()
 		require.NoError(t, err)
 		host := prefix + ".foo.example.com"
 		t.Run("with host field", func(t *testing.T) {
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name},
 				providerFlags: map[string]map[string]string{
@@ -86,10 +86,10 @@ func TestIngressNginx(t *testing.T) {
 						},
 					},
 				},
-			})
+			}).run()
 		})
 		t.Run("multiple ingresses", func(t *testing.T) {
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name},
 				providerFlags: map[string]map[string]string{
@@ -111,13 +111,13 @@ func TestIngressNginx(t *testing.T) {
 					"foo": {&httpRequestVerifier{path: "/"}},
 					"bar": {&httpRequestVerifier{path: "/"}},
 				},
-			})
+			}).run()
 		})
 	})
 	t.Run("to kgateway", func(t *testing.T) {
 		t.Parallel()
 		t.Run("basic conversion", func(t *testing.T) {
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: kgatewayName,
 				emitter:               kgatewayName,
 				providers:             []string{ingressnginx.Name},
@@ -135,7 +135,7 @@ func TestIngressNginx(t *testing.T) {
 				verifiers: map[string][]verifier{
 					"foo": {&httpRequestVerifier{path: "/"}},
 				},
-			})
+			}).run()
 		})
 	})
 
@@ -157,7 +157,7 @@ func TestKongIngress(t *testing.T) {
 	t.Run("to Kong Gateway", func(t *testing.T) {
 		t.Parallel()
 		t.Run("basic conversion", func(t *testing.T) {
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: kong.Name,
 				providers:             []string{kong.Name},
 				ingresses: []*networkingv1.Ingress{
@@ -169,10 +169,10 @@ func TestKongIngress(t *testing.T) {
 				verifiers: map[string][]verifier{
 					"foo": {&httpRequestVerifier{path: "/"}},
 				},
-			})
+			}).run()
 		})
 		t.Run("multiple ingresses", func(t *testing.T) {
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: kong.Name,
 				providers:             []string{kong.Name},
 				ingresses: []*networkingv1.Ingress{
@@ -189,13 +189,13 @@ func TestKongIngress(t *testing.T) {
 					"foo": {&httpRequestVerifier{path: "/"}},
 					"bar": {&httpRequestVerifier{path: "/"}},
 				},
-			})
+			}).run()
 		})
 	})
 	t.Run("to Istio", func(t *testing.T) {
 		t.Parallel()
 		t.Run("basic conversion", func(t *testing.T) {
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{kong.Name},
 				ingresses: []*networkingv1.Ingress{
@@ -207,10 +207,10 @@ func TestKongIngress(t *testing.T) {
 				verifiers: map[string][]verifier{
 					"foo": {&httpRequestVerifier{path: "/"}},
 				},
-			})
+			}).run()
 		})
 		t.Run("multiple ingresses", func(t *testing.T) {
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{kong.Name},
 				ingresses: []*networkingv1.Ingress{
@@ -227,7 +227,7 @@ func TestKongIngress(t *testing.T) {
 					"foo": {&httpRequestVerifier{path: "/"}},
 					"bar": {&httpRequestVerifier{path: "/"}},
 				},
-			})
+			}).run()
 		})
 	})
 }
@@ -237,7 +237,7 @@ func TestMultipleProviders(t *testing.T) {
 	t.Run("ingress-nginx + kong", func(t *testing.T) {
 		t.Parallel()
 		t.Run("to Istio", func(t *testing.T) {
-			runTestCase(t, &testCase{
+			setupTestEnv(t, &testCase{
 				gatewayImplementation: istio.ProviderName,
 				providers:             []string{ingressnginx.Name, kong.Name},
 				providerFlags: map[string]map[string]string{
@@ -259,7 +259,7 @@ func TestMultipleProviders(t *testing.T) {
 					"foo": {&httpRequestVerifier{path: "/"}},
 					"bar": {&httpRequestVerifier{path: "/"}},
 				},
-			})
+			}).run()
 		})
 	})
 }
